@@ -1,0 +1,3 @@
+export const dynamic='force-dynamic';
+import {currentSite} from '@/models/read';import {Panel,PageTitle} from '@/components/ui/Blocks';
+export default async function Privacy(){const s=await currentSite();return <main className="page-wrap page-space"><PageTitle title="Privacy Policy" subtitle="How DM Events handles information submitted through the booking website."/><Panel title="Your information and event requests"><div style={{whiteSpace:'pre-wrap',lineHeight:1.85}}>{s?.privacyPolicy}</div><div className="notice notice-warn" style={{marginTop:27}}>The policy in the supplied prototype is a summary. DM Events must approve its final wording and retention policy before collecting real customer information.</div></Panel></main>}

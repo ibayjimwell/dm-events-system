@@ -1,0 +1,3 @@
+import {route,ok,HttpError} from '@/lib/http';import {createBackup} from '@/lib/backup';import {db} from '@/db';import {systemSettings} from '@/db/schema';import {eq} from 'drizzle-orm';
+export const runtime='nodejs';
+export const POST=route(async(req)=>{const secret=process.env.BACKUP_CRON_SECRET;if(!secret||req.headers.get('authorization')!==`Bearer ${secret}`)throw new HttpError(401,'Unauthorized');const [s]=await db.select().from(systemSettings).where(eq(systemSettings.id,'main'));if(!s?.backupsEnabled)return ok({skipped:true,reason:'Automatic backups disabled'});return ok({backup:await createBackup()});});

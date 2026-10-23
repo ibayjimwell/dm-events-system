@@ -1,0 +1,2 @@
+import {route,ok,readJson} from '@/lib/http';import {requireActor,audit} from '@/lib/auth';import {db} from '@/db';import {users} from '@/db/schema';import {eq} from 'drizzle-orm';import {z} from 'zod';
+export const PATCH=route(async(req)=>{const u=await requireActor();const data=z.object({fullName:z.string().trim().min(2).max(180),phone:z.string().trim().max(50)}).parse(await readJson(req));await db.update(users).set({...data,updatedAt:new Date()}).where(eq(users.id,u.id));await audit(u.id,'PROFILE_UPDATED','user',u.id);return ok({success:true});});

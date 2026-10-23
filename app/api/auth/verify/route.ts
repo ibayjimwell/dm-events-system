@@ -1,0 +1,2 @@
+import {route,ok,readJson} from '@/lib/http';import {db} from '@/db';import {users} from '@/db/schema';import {consumeAuthToken} from '@/lib/auth';import {eq} from 'drizzle-orm';import {z} from 'zod';
+export const POST=route(async(req)=>{const {token}=z.object({token:z.string().min(20)}).parse(await readJson(req));const id=await consumeAuthToken(token,'VERIFY');await db.update(users).set({emailVerifiedAt:new Date()}).where(eq(users.id,id));return ok({success:true});});

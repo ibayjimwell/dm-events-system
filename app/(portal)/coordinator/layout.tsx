@@ -1,0 +1,2 @@
+import {redirect} from 'next/navigation';import {actor} from '@/lib/auth';import SiteNav from '@/components/shared/SiteNav';import Footer from '@/components/shared/Footer';
+export default async function CoordinatorLayout({children}:{children:React.ReactNode}){const u=await actor();if(!u)redirect('/login');if(u.role!=='COORDINATOR')redirect(u.role==='ADMIN'?'/admin':'/client');return <><SiteNav role="COORDINATOR"/>{children}<Footer label="COORDINATOR"/></>}

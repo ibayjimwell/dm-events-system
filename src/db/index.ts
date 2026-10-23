@@ -1,0 +1,10 @@
+import postgres from 'postgres';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import * as schema from './schema';
+const url = process.env.DATABASE_URL;
+if (!url) throw new Error('DATABASE_URL must be configured');
+const globalDb = globalThis as unknown as { dmSql?: ReturnType<typeof postgres> };
+const sql = globalDb.dmSql ?? postgres(url,{ prepare:false, max:10, idle_timeout:20 });
+if (process.env.NODE_ENV !== 'production') globalDb.dmSql = sql;
+export const db = drizzle(sql,{schema});
+export {sql};

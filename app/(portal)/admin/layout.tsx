@@ -1,0 +1,2 @@
+import {redirect} from 'next/navigation';import {actor} from '@/lib/auth';import SiteNav from '@/components/shared/SiteNav';import Footer from '@/components/shared/Footer';
+export default async function AdminLayout({children}:{children:React.ReactNode}){const u=await actor();if(!u)redirect('/login');if(u.role!=='ADMIN')redirect(u.role==='CLIENT'?'/client':'/coordinator');return <><SiteNav role="ADMIN"/>{children}<Footer label="ADMIN"/></>}

@@ -1,0 +1,24 @@
+'use client';
+import {FormEvent,useState} from 'react';import Link from 'next/link';import {useRouter,useSearchParams} from 'next/navigation';import {api,json} from '@/api-client/http';
+type Mode='login'|'register'|'forgot'|'reset'|'verify';
+export default function AuthForms({mode}:{mode:Mode}){
+ const router=useRouter();const query=useSearchParams();const [name,setName]=useState(''),[email,setEmail]=useState(''),[phone,setPhone]=useState(''),[password,setPassword]=useState(''),[consent,setConsent]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
+ const titles:Record<Mode,string>={login:'WELCOME BACK',register:'CREATE AN ACCOUNT',forgot:'FORGOT PASSWORD',reset:'RESET PASSWORD',verify:'VERIFY YOUR EMAIL'};
+ async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError('');setMessage('');try{
+  if(mode==='login'){const result=await api<{user:{role:string}}>('/api/auth/login',json('POST',{email,password}));router.replace(result.user.role==='ADMIN'?'/admin':result.user.role==='COORDINATOR'?'/coordinator':'/client');router.refresh();}
+  if(mode==='register'){const result=await api<{verificationRequired:boolean}>('/api/auth/register',json('POST',{fullName:name,email,phone,password,consent}));if(result.verificationRequired){setMessage('Please check your email for your verification link.');}else{router.replace('/client');router.refresh();}}
+  if(mode==='forgot'){await api('/api/auth/forgot',json('POST',{email}));setMessage('If the account exists, password recovery instructions have been sent.');}
+  if(mode==='reset'){await api('/api/auth/reset',json('POST',{token:query.get('token'),password}));setMessage('Password changed. You can now log in.');}
+  if(mode==='verify'){await api('/api/auth/verify',json('POST',{token:query.get('token')}));setMessage('Email verified. Log in to continue.');}
+ }catch(e){setError(e instanceof Error?e.message:'Action failed');}finally{setBusy(false);}}
+ return <section className="auth-stage" style={{backgroundImage:"linear-gradient(rgba(3,18,35,.75),rgba(3,18,35,.78)),url('/images/venue.jpg')"}}><form className="auth-form" onSubmit={submit}><div className="brand" style={{textAlign:'center',marginBottom:35}}>DM EVENTS</div><h1>{titles[mode]}</h1><p className="subtitle">{mode==='login'?'Access your event planning account':mode==='register'?'Join us to plan your next celebration':mode==='forgot'?'Receive a secure password reset link':mode==='reset'?'Choose a new password': 'Confirm ownership of your email address'}</p>
+  {mode==='register'&&<><div className="field"><label htmlFor="fullname">Full name</label><input id="fullname" required value={name} onChange={e=>setName(e.target.value)} placeholder="Your full name" minLength={2}/></div><div className="field"><label htmlFor="phone">Contact number</label><input id="phone" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="09XX XXX XXXX"/></div></>}
+  {['login','register','forgot'].includes(mode)&&<div className="field"><label htmlFor="email">Email address</label><input id="email" type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@example.com"/></div>}
+  {['login','register','reset'].includes(mode)&&<div className="field"><label htmlFor="password">Password</label><input id="password" type="password" autoComplete={mode==='login'?'current-password':'new-password'} required value={password} onChange={e=>setPassword(e.target.value)} minLength={mode==='login'?1:12} placeholder="••••••••••••"/>{mode!=='login'&&<p style={{fontSize:11,marginTop:8}}>At least 12 characters, including upper/lowercase letters and a number.</p>}</div>}
+  {mode==='register'&&<label style={{display:'flex',alignItems:'flex-start',gap:11,fontSize:12,margin:'17px 0'}}><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)} required style={{width:18,height:18}}/> I have read and agree to the <Link href="/privacy">Privacy Policy</Link>.</label>}
+  {error&&<div role="alert" className="error">{error}</div>}{message&&<div role="status" className="success">{message}</div>}
+  <button className="btn" disabled={busy||mode==='verify'&&!query.get('token')||mode==='reset'&&!query.get('token')}>{busy?'Please wait…':({login:'LOG IN',register:'CREATE ACCOUNT',forgot:'SEND RESET LINK',reset:'UPDATE PASSWORD',verify:'VERIFY EMAIL'} as Record<Mode,string>)[mode]}</button>
+  <div className="auth-links">{mode==='login'?<><span>New client? <Link href="/register">Create account</Link></span><span>|</span><Link href="/forgot-password">Forgot password?</Link></>:<><Link href="/login">Back to log in</Link>{mode==='register'&&<Link href="/privacy">Privacy Policy</Link>}</>}</div>
+  {mode==='login'&&<p style={{fontSize:12,textAlign:'center',marginTop:35}}>Your event information is available only after signing in.</p>}
+ </form></section>;
+}

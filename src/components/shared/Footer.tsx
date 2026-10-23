@@ -1,0 +1,1 @@
+import Link from 'next/link';export default function Footer({label='PUBLIC'}:{label?:string}){return <div className="page-wrap"><footer className="footer"><span>DM EVENTS • EVENT BOOKING & MANAGEMENT • {label}</span><Link href="/privacy" style={{color:'inherit'}}>Privacy Policy</Link></footer></div>;}

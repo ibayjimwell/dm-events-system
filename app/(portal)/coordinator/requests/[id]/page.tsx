@@ -1,0 +1,1 @@
+import ReviewRequest from '@/components/coordinator/ReviewRequest';export default async function Page({params}:{params:Promise<{id:string}>}){const {id}=await params;return <ReviewRequest id={id} role="COORDINATOR"/>}
