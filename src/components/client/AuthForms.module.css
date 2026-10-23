@@ -1,0 +1,91 @@
+.phoneRow {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.95fr) minmax(0, 1.25fr);
+  gap: 10px;
+}
+
+.phoneRow select,
+.phoneRow input {
+  min-width: 0;
+}
+
+.phoneRow select {
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.passwordWrap {
+  position: relative;
+}
+
+.passwordWrap input {
+  padding-right: 55px !important;
+}
+
+.passwordToggle {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  transform: translateY(-50%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: #324c65;
+  background: transparent;
+  cursor: pointer;
+}
+
+.passwordToggle:hover,
+.passwordToggle:focus-visible {
+  color: #0b4d98;
+  background: #eaf2ff;
+  outline: 2px solid transparent;
+}
+
+.invalidInput {
+  border: 2px solid #dc2626 !important;
+  box-shadow: 0 0 0 2px #dc262644 !important;
+}
+
+.errorText {
+  margin: 7px 0 0;
+  color: #ff7373;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-shadow: 0 1px 2px #000a;
+}
+
+.helperText {
+  margin: 7px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #e8eef9;
+}
+
+.privacyRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 17px 0 4px;
+}
+
+.privacyRow input {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 420px) {
+  .phoneRow {
+    grid-template-columns: minmax(105px, 1fr) minmax(0, 1.15fr);
+  }
+}
