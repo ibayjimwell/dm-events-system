@@ -1,16 +1,34 @@
 import { timingSafeEqual } from 'node:crypto';
 import { route, ok, HttpError } from '@/lib/http';
 import { processNotifications } from '@/lib/notifications/worker';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
-/** Only a configured secret may trigger this worker. Can be invoked from a scheduler via GET. */
+/**
+ * Invoke from Vercel Cron using CRON_SECRET, or from a trusted external
+ * scheduler using NOTIFICATIONS_CRON_SECRET. Never make this route public.
+ */
 export const GET = route(async (req) => {
-  const expected = process.env.NOTIFICATIONS_CRON_SECRET;
-  const provided = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') || '';
-  if (!expected || expected.length < 32) throw new HttpError(503, 'Notification scheduler is not configured.');
-  const a = Buffer.from(expected), b = Buffer.from(provided);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) throw new HttpError(401, 'Unauthorized');
-  const result = await processNotifications(10);
-  return ok(result);
+  const authorizedSecrets = [
+    process.env.NOTIFICATIONS_CRON_SECRET,
+    process.env.CRON_SECRET,
+  ].filter((secret): secret is string => Boolean(secret && secret.length >= 32));
+
+  if (!authorizedSecrets.length) {
+    throw new HttpError(503, 'Notification scheduler is not configured.');
+  }
+
+  const provided = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? '';
+  const input = Buffer.from(provided);
+  const authorized = authorizedSecrets.some((secret) => {
+    const expected = Buffer.from(secret);
+    return input.length === expected.length && timingSafeEqual(input, expected);
+  });
+
+  if (!authorized) throw new HttpError(401, 'Unauthorized');
+
+  // Small concurrent batch to fit within a typical function invocation.
+  return ok(await processNotifications(2));
 });
