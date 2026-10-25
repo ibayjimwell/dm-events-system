@@ -1,3 +1,4 @@
+import {can} from '@/lib/access';
 
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
@@ -50,7 +51,7 @@ export const POST = route(async (req) => {
   // Only administrators can manage public website images.
   if (
     (kind === 'PACKAGE' || kind === 'HERO') &&
-    user.role !== 'ADMIN'
+    !(await can(user,kind === 'PACKAGE' ? 'packages.manage' : 'content.manage'))
   ) {
     throw new HttpError(
       403,
@@ -58,6 +59,7 @@ export const POST = route(async (req) => {
     );
   }
 
+  if ((kind === 'INSPIRATION' && !await can(user,'bookings.create.own') && !await can(user,'bookings.create.walkin')) || (kind === 'MESSAGE' && !await can(user,'messages.own') && !await can(user,'messages.staff'))) throw new HttpError(403,'Module upload not permitted');
   if (!(file instanceof File)) {
     throw new HttpError(
       400,

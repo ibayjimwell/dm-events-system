@@ -1,5 +1,7 @@
+
 'use client';
 
+import type { Permission } from '@/lib/permissions';
 import Link from 'next/link';
 import { api } from '@/api-client/http';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
@@ -18,9 +20,10 @@ type Analytics = {
   monthly: { month: string; count: number; amount: string }[];
 };
 
-export default function Overview() {
+export default function Overview({permissions=[]}:{permissions?:Permission[]}) {
+  const canAnalytics=permissions.includes('analytics.view');
   const summary = useLiveQuery(() => api<Summary>('/api/summary'), []);
-  const analytics = useLiveQuery(() => api<Analytics>('/api/analytics'), []);
+  const analytics = useLiveQuery(() => canAnalytics ? api<Analytics>('/api/analytics') : Promise.resolve({monthly:[]}), [canAnalytics]);
   const counts = summary.data?.counts;
   const months = analytics.data?.monthly.slice(-5).reverse() ?? [];
 
@@ -122,26 +125,19 @@ export default function Overview() {
           </p>
         </Panel>
 
-        <Panel title="Administrator access" className="min-w-0 overflow-hidden">
+        <Panel title="Authorized modules" className="min-w-0 overflow-hidden">
           <ul className="mt-1 space-y-4 break-words text-sm leading-relaxed sm:mt-4">
-            <li className="flex min-w-0 items-start gap-3">
-              <span className="shrink-0 text-[#2d967c]" aria-hidden="true">✓</span>
-              <Link className="min-w-0 text-[#0b4d98] underline-offset-4 hover:underline" href="/admin/analytics">
-                Monthly booking-value analytics
-              </Link>
-            </li>
             {[
-              'Website content maintenance',
-              'Booking and account oversight',
-              'Package information management',
-              'Encrypted backup operations',
-            ].map((item) => (
-              <li key={item} className="flex min-w-0 items-start gap-3">
-                <span className="shrink-0 text-[#2d967c]" aria-hidden="true">✓</span>
-                <span className="min-w-0">{item}</span>
-              </li>
-            ))}
+              {p:'analytics.view',label:'Monthly booking-value analytics',href:'/admin/analytics'},
+              {p:'content.manage',label:'Website content',href:'/admin/maintenance/content'},
+              {p:'bookings.view.all',label:'Booking oversight',href:'/admin/bookings'},
+              {p:'packages.manage',label:'Package management',href:'/admin/maintenance/packages'},
+              {p:'backups.manage',label:'Encrypted backups',href:'/admin/maintenance/backups'},
+              {p:'users.manage',label:'Accounts and permission management',href:'/admin/maintenance/users'},
+              {p:'bookings.create.walkin',label:'Walk-in bookings',href:'/admin/walk-in'},
+            ].filter(item=>permissions.includes(item.p as Permission)).map(item=><li key={item.p} className="flex min-w-0 items-start gap-3"><span className="shrink-0 text-[#2d967c]">✓</span><Link className="min-w-0 text-[#0b4d98] hover:underline" href={item.href}>{item.label}</Link></li>)}
           </ul>
+          {!permissions.includes('analytics.view')&&<p className="hint mt-5">Financial reporting requires the separate Analytics permission.</p>}
         </Panel>
       </div>
     </main>

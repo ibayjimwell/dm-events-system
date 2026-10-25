@@ -15,6 +15,13 @@
       "when": 1792700001000,
       "tag": "0001_security",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792900000000,
+      "tag": "0002_module_access_walkins",
+      "breakpoints": true
     }
   ]
 }

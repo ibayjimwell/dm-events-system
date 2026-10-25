@@ -1,6 +1,7 @@
+import {requirePermission} from '@/lib/access';
 import {route,ok,readJson,HttpError} from '@/lib/http';import {requireActor,audit} from '@/lib/auth';import {statusInput} from '@/lib/validators';import {bookings,bookingHistory} from '@/db/schema';import {db} from '@/db';import {and,eq,ne,inArray,sql} from 'drizzle-orm';
 export const POST=route(async(req,ctx:{params:Promise<{id:string}>})=>{
- const u=await requireActor('COORDINATOR','ADMIN');const {id}=await ctx.params;const v=statusInput.parse(await readJson(req));
+ const u=await requirePermission('bookings.status');const {id}=await ctx.params;const v=statusInput.parse(await readJson(req));
  const result=await db.transaction(async(tx)=>{
   const [b]=await tx.select().from(bookings).where(eq(bookings.id,id)).for('update');if(!b)throw new HttpError(404,'Booking not found');
   // Serialize decisions for the same event date to avoid simultaneous incompatible holds.

@@ -180,3 +180,6 @@ export const packageInput = z.object({
   published: z.boolean(),
   sortOrder: z.number().int().min(0).max(1000),
 });
+
+/** Contact email is optional for walk-in clients who only provide a phone. */
+export const walkInBookingInput = bookingInput.extend({contactEmail: z.union([z.literal(''),z.string().trim().email()])});

@@ -1,3 +1,4 @@
+import {can} from '@/lib/access';
 
 import { and, eq } from 'drizzle-orm';
 
@@ -63,7 +64,7 @@ export const GET = route(
 
     // Administrator or original uploader.
     if (
-      user?.role === 'ADMIN' ||
+      (user && (await can(user,'packages.manage') && asset.kind === 'PACKAGE' || await can(user,'content.manage') && asset.kind === 'HERO')) ||
       user?.id === asset.uploadedBy
     ) {
       allowed = true;
@@ -78,8 +79,7 @@ export const GET = route(
 
       if (
         booking &&
-        (user.role === 'COORDINATOR' ||
-          user.role === 'ADMIN' ||
+        (await can(user,'bookings.view.all') ||
           booking.clientId === user.id)
       ) {
         allowed = true;

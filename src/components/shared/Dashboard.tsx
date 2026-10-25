@@ -1,5 +1,7 @@
+
 'use client';
 
+import type { Permission } from '@/lib/permissions';
 import Link from 'next/link';
 import { api } from '@/api-client/http';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
@@ -29,7 +31,7 @@ type Summary = {
 
 type Metric = { label: string; value: string | number; detail: string };
 
-export default function Dashboard({ role }: { role: 'CLIENT' | 'COORDINATOR' | 'ADMIN' }) {
+export default function Dashboard({ role,permissions=[] }: { role: 'CLIENT' | 'COORDINATOR' | 'ADMIN';permissions?:Permission[] }) {
   const { data, loading, error } = useLiveQuery(() => api<Summary>('/api/summary'), []);
   const isClient = role === 'CLIENT';
   const isAdmin = role === 'ADMIN';
@@ -84,6 +86,12 @@ export default function Dashboard({ role }: { role: 'CLIENT' | 'COORDINATOR' | '
           { text: 'Reply to messages', href: '/coordinator/messages' },
         ];
 
+  const allowedActions=actions.filter(action=>{const key:Record<string,Permission>={
+    '/client/bookings':'bookings.view.own','/client/messages':'messages.own','/client/book':'bookings.create.own',
+    '/coordinator/requests':'bookings.view.all','/coordinator/calendar':'calendar.view','/coordinator/messages':'messages.staff',
+    '/admin/analytics':'analytics.view','/admin/maintenance/packages':'packages.manage','/admin/maintenance/content':'content.manage','/admin/maintenance/users':'users.manage'};
+    return !key[action.href]||permissions.includes(key[action.href]);
+  });
   return (
     <main className="page-wrap page-space min-w-0">
       <PageTitle title={title} />
@@ -186,7 +194,7 @@ export default function Dashboard({ role }: { role: 'CLIENT' | 'COORDINATOR' | '
             title={isClient ? 'Quick actions' : isAdmin ? 'Administrator access' : 'Coordinator actions'}
           >
             <nav aria-label={`${title} actions`} className="grid min-w-0 grid-cols-1 gap-3 pt-2 sm:grid-cols-2 xl:grid-cols-1">
-              {actions.map((action) => (
+              {allowedActions.map((action) => (
                 <Link key={action.href} className="btn min-w-0 w-full text-center break-words" href={action.href}>
                   {action.text}
                 </Link>

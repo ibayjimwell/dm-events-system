@@ -37,9 +37,13 @@ type Detail = {
 export default function ReviewRequest({
   id,
   role,
+  canUpdateStatus = true,
+  canMessage = true,
 }: {
   id: string;
   role: 'COORDINATOR' | 'ADMIN';
+  canUpdateStatus?: boolean;
+  canMessage?: boolean;
 }) {
   const { data, loading, error, refresh } = useLiveQuery(
     () => api<{ booking: Detail }>(`/api/bookings/${id}`),
@@ -195,7 +199,7 @@ export default function ReviewRequest({
                 <p className="hint">Client did not upload a photo.</p>
               )}
 
-              <form onSubmit={save} className="mt-7 grid min-w-0 gap-5">
+              {canUpdateStatus ? <form onSubmit={save} className="mt-7 grid min-w-0 gap-5">
                 <div className="min-w-0 [&_.field]:min-w-0">
                   <Field label="Booking status">
                     <select
@@ -252,14 +256,14 @@ export default function ReviewRequest({
                   {busy ? 'Saving…' : 'Save Status'}
                 </button>
                 {result && <p className="notice break-words [overflow-wrap:anywhere]" role="status">{result}</p>}
-              </form>
+              </form> : <p className="notice mt-5">This account has review access but not permission to change booking status.</p>}
 
-              <Link
+              {canMessage && <Link
                 href={role === 'ADMIN' ? `/admin/messages?booking=${id}` : `/coordinator/messages?booking=${id}`}
                 className="btn btn-ghost mt-4 w-full text-center"
               >
                 Message client
-              </Link>
+              </Link>}
               <Link
                 href={role === 'ADMIN' ? '/admin/bookings' : '/coordinator/calendar'}
                 className="mt-4 block break-words font-semibold text-[#0b4d98] hover:underline"
