@@ -199,7 +199,7 @@ export default function SiteNav({
                 className={`${mainLink} gap-2 ${settingsActive || settingsOpen ? 'bg-white/15 text-white' : 'text-[#cbd9e9] hover:bg-white/10 hover:text-white'}`}
               >
                 <Settings2 size={16} aria-hidden="true" />
-                Settings
+                More
                 <ChevronDown size={15} aria-hidden="true" className={`transition-transform ${settingsOpen ? 'rotate-180' : ''}`} />
               </button>
               {settingsOpen && (
@@ -245,7 +245,7 @@ export default function SiteNav({
                   aria-controls="dm-mobile-settings"
                   className={`${mainLink} flex w-full justify-between gap-3 ${settingsActive || settingsOpen ? 'bg-white/15 text-white' : 'text-[#cbd9e9]'}`}
                 >
-                  <span className="flex items-center gap-2"><Settings2 size={17} aria-hidden="true" /> Settings & Tools</span>
+                  <span className="flex items-center gap-2"><Settings2 size={17} aria-hidden="true" />More</span>
                   <ChevronDown size={18} className={settingsOpen ? 'rotate-180' : ''} aria-hidden="true" />
                 </button>
                 {settingsOpen && (
