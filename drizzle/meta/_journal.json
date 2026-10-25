@@ -22,6 +22,13 @@
       "when": 1792900000000,
       "tag": "0002_module_access_walkins",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792900001000,
+      "tag": "0003_booking_notifications",
+      "breakpoints": true
     }
   ]
 }

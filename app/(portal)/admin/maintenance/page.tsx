@@ -3,7 +3,7 @@ import {notFound} from 'next/navigation';
 import {actor} from '@/lib/auth';
 import {permissionSet} from '@/lib/access';
 import {PageTitle,Panel} from '@/components/ui/Blocks';
-import {Boxes,Globe,Users,Settings,Database} from 'lucide-react';
+import {Boxes,Globe,Users,Settings,Database,BellRing} from 'lucide-react';
 import type {Permission} from '@/lib/permissions';
 const options=[
  {title:'Manage packages',detail:'Edit package details, images and visibility.',href:'/admin/maintenance/packages',permission:'packages.manage',Icon:Boxes},
@@ -11,6 +11,7 @@ const options=[
  {title:'User access & permissions',detail:'Manage staff accounts and module-level permissions.',href:'/admin/maintenance/users',permission:'users.manage',Icon:Users},
  {title:'Encrypted backups',detail:'Review backup history and create authorized encrypted backups.',href:'/admin/maintenance/backups',permission:'backups.manage',Icon:Database},
  {title:'System settings',detail:'Maintain system settings and backup policy.',href:'/admin/maintenance/settings',permission:'settings.manage',Icon:Settings},
+ {title:'Email & SMS notifications',detail:'Review delivery history and retry failed booking notifications.',href:'/admin/maintenance/notifications',permission:'settings.manage',Icon:BellRing},
 ] as const;
 export default async function Maintenance(){
  const user=await actor();if(!user)notFound();const allowed=await permissionSet(user);

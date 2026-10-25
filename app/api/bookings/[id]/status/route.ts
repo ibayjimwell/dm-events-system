@@ -1,4 +1,7 @@
 import {requirePermission} from '@/lib/access';
+import {notificationOutbox} from '@/db/schema';
+import {notificationRows} from '@/lib/notifications/enqueue';
+import {tryImmediateDelivery} from '@/lib/notifications/worker';
 import {route,ok,readJson,HttpError} from '@/lib/http';import {requireActor,audit} from '@/lib/auth';import {statusInput} from '@/lib/validators';import {bookings,bookingHistory} from '@/db/schema';import {db} from '@/db';import {and,eq,ne,inArray,sql} from 'drizzle-orm';
 export const POST=route(async(req,ctx:{params:Promise<{id:string}>})=>{
  const u=await requirePermission('bookings.status');const {id}=await ctx.params;const v=statusInput.parse(await readJson(req));
@@ -13,8 +16,20 @@ export const POST=route(async(req,ctx:{params:Promise<{id:string}>})=>{
   if(['HELD','CONFIRMED'].includes(v.status)&&conflicts.length&&!v.overrideConflict)throw new HttpError(409,`Potential date conflict: ${conflicts.map(x=>x.reference+' ('+x.status+')').join(', ')}. Review the calendar and explicitly acknowledge to continue.`);
   const newConfirmedAt=v.status==='CONFIRMED'?b.confirmedAt||new Date():null;
   await tx.update(bookings).set({status:v.status,reviewNote:v.note??b.reviewNote,bookedValue:v.bookedValue===undefined?b.bookedValue:v.bookedValue===null?null:String(v.bookedValue),confirmedAt:newConfirmedAt,updatedAt:new Date(),cancellationRequestedAt:v.status==='CANCELLED'?null:b.cancellationRequestedAt}).where(eq(bookings.id,id));
-  await tx.insert(bookingHistory).values({bookingId:id,actorId:u.id,fromStatus:b.status,toStatus:v.status,note:v.note||'Status updated',overrideConflict:v.overrideConflict});
-  return {status:v.status,conflicts};
+  const [history]=await tx.insert(bookingHistory).values({bookingId:id,actorId:u.id,fromStatus:b.status,toStatus:v.status,note:v.note||'Status updated',overrideConflict:v.overrideConflict}).returning({id:bookingHistory.id});
+  const valueChanged = v.bookedValue!==undefined && (
+    v.bookedValue===null ? b.bookedValue!==null : b.bookedValue===null || Number(b.bookedValue)!==v.bookedValue
+  );
+  const detailsChanged = (v.note!==undefined && v.note!==(b.reviewNote||'')) || valueChanged;
+  const shouldNotify = b.status!==v.status || detailsChanged;
+  if(shouldNotify){
+    const kind=b.status!==v.status?'BOOKING_STATUS_CHANGED':'BOOKING_DETAILS_UPDATED';
+    const notifications=notificationRows(b,kind,history.id,{status:v.status});
+    if(notifications.length)await tx.insert(notificationOutbox).values(notifications).onConflictDoNothing();
+  }
+  return {status:v.status,conflicts,changed:shouldNotify};
  });
- await audit(u.id,'BOOKING_STATUS_UPDATED','booking',id,{status:v.status,overrideConflict:v.overrideConflict});return ok(result);
+ await audit(u.id,'BOOKING_STATUS_UPDATED','booking',id,{status:v.status,overrideConflict:v.overrideConflict});
+ if(result.changed)await tryImmediateDelivery(id);
+ return ok(result);
 });

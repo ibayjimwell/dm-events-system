@@ -46,6 +46,7 @@ const maintenanceLinks: NavItem[] = [
   { href: '/admin/maintenance/content', label: 'Website Content', permission: 'content.manage' },
   { href: '/admin/maintenance/backups', label: 'Backups', permission: 'backups.manage' },
   { href: '/admin/maintenance/settings', label: 'System Settings', permission: 'settings.manage' },
+  { href: '/admin/maintenance/notifications', label: 'Email & SMS Notifications', permission: 'settings.manage' },
   { href: '/admin/maintenance/users', label: 'User Access', permission: 'users.manage' },
 ];
 

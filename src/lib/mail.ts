@@ -1,8 +1,16 @@
-import { Resend } from 'resend';
-import { HttpError } from './http';
-export async function sendMail(to:string,subject:string,body:string){
- const key=process.env.RESEND_API_KEY;const from=process.env.MAIL_FROM;
- if(!key || !from)throw new HttpError(503,'Email delivery is not configured. Contact your administrator.');
- const {error}=await new Resend(key).emails.send({from,to,subject,text:body});
- if(error)throw new HttpError(503,'Email delivery unavailable. Please try again later.');
+import { HttpError } from '@/lib/http';
+import { postToPython } from '@/lib/notifications/providers';
+
+/** Auth verification/reset emails are also sent as escaped HTML through Python Gmail SMTP. */
+export async function sendMail(to: string, subject: string, body: string) {
+  const url = process.env.PYTHON_MAIL_URL;
+  const secret = process.env.PYTHON_MAIL_SECRET;
+  if (!url || !secret || secret.length < 32) throw new HttpError(503, 'Email service is not configured.');
+  try {
+    await postToPython(url, secret, JSON.stringify({
+      to, subject, template: 'generic', data: { heading: subject, text: body },
+    }));
+  } catch {
+    throw new HttpError(503, 'Email service unavailable. Please try again later.');
+  }
 }
