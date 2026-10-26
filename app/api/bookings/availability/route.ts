@@ -1,14 +1,25 @@
-import { eq, inArray, and } from 'drizzle-orm';
 import { route, ok, HttpError } from '@/lib/http';
-import { db } from '@/db';
-import { bookings } from '@/db/schema';
+import {
+  isISODate,
+  isISOMonth,
+  dateReservation,
+  reservedDatesForMonth,
+} from '@/lib/bookingAvailability';
 
-/** Public calendar availability; returns only the occupied/free boolean, not customer data. */
-export const GET = route(async req => {
-  const date=new URL(req.url).searchParams.get('date')||'';
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date+'T12:00:00Z')))
-    throw new HttpError(400,'Valid date required (YYYY-MM-DD)');
-  const [occupied]=await db.select({id:bookings.id}).from(bookings)
-    .where(and(eq(bookings.eventDate,date),inArray(bookings.status,['HELD','CONFIRMED']))).limit(1);
-  return ok({date,available:!occupied});
+export const dynamic = 'force-dynamic';
+
+/** Returns no customer names, references, or contact details. */
+export const GET = route(async (request) => {
+  const params = new URL(request.url).searchParams;
+  const month = params.get('month');
+  if (month !== null) {
+    if (!isISOMonth(month)) throw new HttpError(400, 'Valid month required (YYYY-MM).');
+    return ok({ month, blockedDates: await reservedDatesForMonth(month) });
+  }
+
+  // Preserve the previously introduced date query for other screens.
+  const date = params.get('date') ?? '';
+  if (!isISODate(date)) throw new HttpError(400, 'Valid date required (YYYY-MM-DD).');
+  const status = await dateReservation(date);
+  return ok({ date, available: status === null, status });
 });

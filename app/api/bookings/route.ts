@@ -1,3 +1,4 @@
+import {requireAvailableBookingDate} from '@/lib/bookingAvailability';
 import {route,ok,readJson,HttpError} from '@/lib/http';
 import {requireActor,audit,checkAuthLimit} from '@/lib/auth';
 import {requirePermission,can} from '@/lib/access';
@@ -22,7 +23,7 @@ export const POST=route(async(req)=>{
   // The personal-booking route always ties an online request to its own login.
   if(user.role!=='CLIENT')throw new HttpError(403,'Use Walk-in Booking for customers without an account');
   const values=bookingInput.parse(await readJson(req));
-  if(values.eventDate<new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Manila'}))throw new HttpError(400,'Choose today or a future date');
+  await requireAvailableBookingDate(values.eventDate);
   if(values.packageId){const [pkg]=await db.select().from(packages).where(and(eq(packages.id,values.packageId),eq(packages.published,true)));if(!pkg)throw new HttpError(400,'Package unavailable');}
   if(values.inspirationAssetId){const [asset]=await db.select().from(mediaAssets).where(and(eq(mediaAssets.id,values.inspirationAssetId),eq(mediaAssets.uploadedBy,user.id),eq(mediaAssets.kind,'INSPIRATION')));if(!asset||asset.bookingId)throw new HttpError(400,'Inspiration image unavailable');}
   await checkAuthLimit('online-booking:'+user.id,5); // Max 5 submissions per 15 minutes.

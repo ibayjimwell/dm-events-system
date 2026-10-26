@@ -1,3 +1,4 @@
+import {requireAvailableBookingDate} from '@/lib/bookingAvailability';
 import {randomBytes} from 'node:crypto';
 import {and,eq} from 'drizzle-orm';
 import {db} from '@/db';
@@ -13,7 +14,7 @@ import {tryImmediateDelivery} from '@/lib/notifications/worker';
 export const POST=route(async(req)=>{
  const staff=await requirePermission('bookings.create.walkin');
  const v=walkInBookingInput.parse(await readJson(req));
- if(v.eventDate<new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Manila'}))throw new HttpError(400,'Choose today or a future date');
+ await requireAvailableBookingDate(v.eventDate);
  if(v.packageId){const [p]=await db.select().from(packages).where(and(eq(packages.id,v.packageId),eq(packages.published,true)));if(!p)throw new HttpError(400,'Package unavailable');}
  if(v.inspirationAssetId){const [a]=await db.select().from(mediaAssets).where(and(eq(mediaAssets.id,v.inspirationAssetId),eq(mediaAssets.uploadedBy,staff.id),eq(mediaAssets.kind,'INSPIRATION')));if(!a||a.bookingId)throw new HttpError(400,'Inspiration photo unavailable');}
  await checkAuthLimit('walk-in-booking:'+staff.id,30); // Basic operational abuse guard.
