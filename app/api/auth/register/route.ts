@@ -12,5 +12,5 @@ export const POST=route(async(req)=>{
   await sendMail(data.email,'Verify your DM Events email',`Confirm your email address: ${process.env.APP_URL}/verify-email?token=${token}\nLink expires in 24 hours.`);
   return ok({verificationRequired:true,message:'Check your email to verify your account.'},201);
  }
- await createSession(user.id);return ok({user:{id:user.id,role:'CLIENT'},verificationRequired:false},201);
+ await createSession(user.id,'CLIENT');return ok({user:{id:user.id,role:'CLIENT'},verificationRequired:false},201);
 });

@@ -25,10 +25,14 @@ export async function requireActor(...roles:Role[]):Promise<Actor> {
  if(process.env.EMAIL_VERIFICATION_REQUIRED==='true'&&!user.emailVerifiedAt)throw new HttpError(403,'Verify your email address to continue');
  return user;
 }
-export async function createSession(userId:string){
+export async function createSession(userId:string, role?:Role){
  const token=randomToken();const days=Number(process.env.SESSION_DAYS||'7');const expires=new Date(Date.now()+days*86400000);
  await db.insert(sessions).values({userId,tokenHash:digest(token),expiresAt:expires});
- (await cookies()).set(cookieName,token,{httpOnly:true,secure:process.env.SESSION_COOKIE_SECURE==='true'||process.env.NODE_ENV==='production',sameSite:'lax',path:'/',expires});
+ const jar=await cookies();
+ jar.set(cookieName,token,{httpOnly:true,secure:process.env.SESSION_COOKIE_SECURE==='true'||process.env.NODE_ENV==='production',sameSite:'lax',path:'/',expires});
+ // A role hint is not authorization. It only chooses the signed-out starting screen.
+ if(role==='ADMIN'||role==='COORDINATOR')jar.set('dm_staff_portal','1',{httpOnly:true,secure:process.env.SESSION_COOKIE_SECURE==='true'||process.env.NODE_ENV==='production',sameSite:'lax',path:'/',maxAge:30*86400});
+ else if(role==='CLIENT')jar.delete('dm_staff_portal');
 }
 export async function endSession(){const jar=await cookies();const token=jar.get(cookieName)?.value;if(token)await db.delete(sessions).where(eq(sessions.tokenHash,digest(token)));jar.delete(cookieName);}
 export async function issueAuthToken(userId:string,purpose:'RESET'|'VERIFY',mins:number){

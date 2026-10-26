@@ -2,10 +2,11 @@ import {requirePermission} from '@/lib/access';
 import {notificationOutbox} from '@/db/schema';
 import {notificationRows} from '@/lib/notifications/enqueue';
 import {tryImmediateDelivery} from '@/lib/notifications/worker';
-import {route,ok,readJson,HttpError} from '@/lib/http';import {requireActor,audit} from '@/lib/auth';import {statusInput} from '@/lib/validators';import {bookings,bookingHistory} from '@/db/schema';import {db} from '@/db';import {and,eq,ne,inArray,sql} from 'drizzle-orm';
+import {route,ok,readJson,HttpError} from '@/lib/http';import {statusInput} from '@/lib/validators';import {bookings,bookingHistory,auditLogs} from '@/db/schema';import {db} from '@/db';import {and,eq,ne,inArray,sql} from 'drizzle-orm';
 export const POST=route(async(req,ctx:{params:Promise<{id:string}>})=>{
  const u=await requirePermission('bookings.status');const {id}=await ctx.params;const v=statusInput.parse(await readJson(req));
- const result=await db.transaction(async(tx)=>{
+ let result: {status: typeof v.status; conflicts: {reference:string;status:string;venue:string}[];changed:boolean};
+ try { result=await db.transaction(async(tx)=>{
   const [b]=await tx.select().from(bookings).where(eq(bookings.id,id)).for('update');if(!b)throw new HttpError(404,'Booking not found');
   // Serialize decisions for the same event date to avoid simultaneous incompatible holds.
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${b.eventDate}))`);
@@ -13,10 +14,12 @@ export const POST=route(async(req,ctx:{params:Promise<{id:string}>})=>{
   if(v.status==='CONFIRMED'&&(v.bookedValue===undefined||v.bookedValue===null)&&b.bookedValue===null)throw new HttpError(400,'Record an agreed booking value before confirming');
   if(v.status==='CONFIRMED'&&(v.bookedValue===null||(v.bookedValue===undefined?Number(b.bookedValue):v.bookedValue)<=0))throw new HttpError(400,'Booking value must be greater than zero');
   const conflicts=await tx.select({reference:bookings.reference,status:bookings.status,venue:bookings.venue}).from(bookings).where(and(eq(bookings.eventDate,b.eventDate),ne(bookings.id,id),inArray(bookings.status,['HELD','CONFIRMED'])));
-  if(['HELD','CONFIRMED'].includes(v.status)&&conflicts.length&&!v.overrideConflict)throw new HttpError(409,`Potential date conflict: ${conflicts.map(x=>x.reference+' ('+x.status+')').join(', ')}. Review the calendar and explicitly acknowledge to continue.`);
+  if(['HELD','CONFIRMED'].includes(v.status)&&conflicts.length)throw new HttpError(409,`Date unavailable: ${conflicts.map(x=>x.reference+' ('+x.status+')').join(', ')}. A held or confirmed event already occupies this date. Choose another date or cancel/release the existing reservation.`);
   const newConfirmedAt=v.status==='CONFIRMED'?b.confirmedAt||new Date():null;
   await tx.update(bookings).set({status:v.status,reviewNote:v.note??b.reviewNote,bookedValue:v.bookedValue===undefined?b.bookedValue:v.bookedValue===null?null:String(v.bookedValue),confirmedAt:newConfirmedAt,updatedAt:new Date(),cancellationRequestedAt:v.status==='CANCELLED'?null:b.cancellationRequestedAt}).where(eq(bookings.id,id));
-  const [history]=await tx.insert(bookingHistory).values({bookingId:id,actorId:u.id,fromStatus:b.status,toStatus:v.status,note:v.note||'Status updated',overrideConflict:v.overrideConflict}).returning({id:bookingHistory.id});
+  const [history]=await tx.insert(bookingHistory).values({bookingId:id,actorId:u.id,fromStatus:b.status,toStatus:v.status,note:v.note||'Status updated',overrideConflict:false}).returning({id:bookingHistory.id});
+  // Keep audit and booking state atomic, so the user never sees a false failure after a committed save.
+  await tx.insert(auditLogs).values({actorId:u.id,action:'BOOKING_STATUS_UPDATED',targetType:'booking',targetId:id,details:{status:v.status,overrideConflict:false}});
   const valueChanged = v.bookedValue!==undefined && (
     v.bookedValue===null ? b.bookedValue!==null : b.bookedValue===null || Number(b.bookedValue)!==v.bookedValue
   );
@@ -28,8 +31,12 @@ export const POST=route(async(req,ctx:{params:Promise<{id:string}>})=>{
     if(notifications.length)await tx.insert(notificationOutbox).values(notifications).onConflictDoNothing();
   }
   return {status:v.status,conflicts,changed:shouldNotify};
- });
- await audit(u.id,'BOOKING_STATUS_UPDATED','booking',id,{status:v.status,overrideConflict:v.overrideConflict});
- if(result.changed)await tryImmediateDelivery(id);
+ }); } catch(error) {
+  const e=error as {code?:string;cause?:{code?:string;constraint_name?:string};constraint_name?:string};
+  if(e.code==='23505'||e.cause?.code==='23505')throw new HttpError(409,'This date was just reserved by another event. Refresh the calendar and choose a free date.');
+  throw error;
+ }
+ // Delivery is best-effort: a gateway outage must not turn a committed save into HTTP 500.
+ if(result.changed){try{await tryImmediateDelivery(id);}catch(error){console.error('Notification dispatch delayed for booking',id,error);}}
  return ok(result);
 });

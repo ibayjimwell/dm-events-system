@@ -183,6 +183,7 @@ export const bookings = pgTable(
   (t) => [
     index("bookings_client_idx").on(t.clientId),
     index("bookings_date_idx").on(t.eventDate),
+    uniqueIndex("bookings_one_reserved_date").on(t.eventDate).where(sql`${t.status} IN ('HELD','CONFIRMED')`),
     index("bookings_status_idx").on(t.status),
     index("bookings_confirmed_idx").on(t.confirmedAt),
     check("bookings_source_check", sql`${t.source} IN ('ONLINE','WALK_IN')`),

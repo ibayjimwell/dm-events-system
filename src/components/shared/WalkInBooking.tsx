@@ -1,4 +1,5 @@
 'use client';
+import { uploadImage } from '@/api-client/uploadImage';
 import CountryPhoneInput from '@/components/ui/CountryPhoneInput';
 import { normalizePhoneNumber, type PhoneCountry } from '@/lib/validators';
 
@@ -18,18 +19,23 @@ const input='w-full min-w-0 rounded-lg border border-[#cbd9e6] bg-white px-3 py-
 export default function WalkInBooking({role}:{role:'ADMIN'|'COORDINATOR'}){
  const router=useRouter();const [country,setCountry]=useState<PhoneCountry>('PH');const [form,setForm]=useState<Values>(initial);const [step,setStep]=useState<1|2>(1);
  const [packages,setPackages]=useState<Package[]>([]);const [consent,setConsent]=useState(false);
- const [photo,setPhoto]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');
+ const [photo,setPhoto]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [dateOccupied,setDateOccupied]=useState(false);
  const [completed,setCompleted]=useState<{id:string;reference:string}|null>(null);
  const base=role==='ADMIN'?'/admin/bookings':'/coordinator/requests';
  const set=(key:keyof Values,value:string)=>setForm(old=>({...old,[key]:value}));
  const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});
  useEffect(()=>{void api<{packages:Package[]}>('/api/packages').then(x=>setPackages(x.packages)).catch(()=>{});},[]);
+ useEffect(()=>{
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(form.eventDate)){setDateOccupied(false);return;}
+  let active=true;
+  void api<{available:boolean}>(`/api/bookings/availability?date=${encodeURIComponent(form.eventDate)}`).then(r=>{if(active)setDateOccupied(!r.available);}).catch(()=>{if(active)setDateOccupied(false);});
+  return ()=>{active=false;};
+ },[form.eventDate]);
  function next(e:FormEvent){e.preventDefault();setError('');if(form.eventDate<today){setError('Select today or a future date.');return;}if(!normalizePhoneNumber(form.contactPhone,country)){setError('Enter a valid contact number for the selected country.');return;}setStep(2);window.scrollTo({top:0,behavior:'smooth'});}
  async function upload(e:ChangeEvent<HTMLInputElement>){const image=e.target.files?.[0];if(!image)return;
-  setError('');if(image.size<=0||image.size>1048576){setError('Choose an image of 1 MB or less.');return;}
+  setError('');if(image.size<=0||image.size>10*1024*1024){setError('Choose an image of 10 MB or less.');return;}
   if(!['image/jpeg','image/png','image/webp'].includes(image.type)){setError('Only JPG, PNG or WebP images are allowed.');return;}
-  setBusy(true);try{const body=new FormData();body.append('kind','INSPIRATION');body.append('image',image);
-   const result=await api<{asset:{id:string;name:string}}>('/api/uploads',{method:'POST',body});set('inspirationAssetId',result.asset.id);setPhoto(result.asset.name);
+  setBusy(true);try{const asset=await uploadImage(image,'INSPIRATION');set('inspirationAssetId',asset.id);setPhoto(asset.name);
   }catch(e){setError(e instanceof Error?e.message:'Image upload failed');}finally{setBusy(false);}
  }
  async function submit(e:FormEvent){e.preventDefault();setError('');if(!consent){setError('Record the customer’s privacy acknowledgment before submitting.');return;}
@@ -47,9 +53,9 @@ export default function WalkInBooking({role}:{role:'ADMIN'|'COORDINATOR'}){
  {textInput('Preferred date','eventDate',{type:'date',min:today})}{textInput('Guest count','guestCount',{type:'number',min:'1'})}
  {textInput('Venue / location','venue')}{textInput('Estimated budget (PHP)','estimatedBudget')}
  <label className="block min-w-0"><span className={field}>Preferred package</span><select className={input} value={form.packageId} onChange={e=>set('packageId',e.target.value)}><option value="">Not decided</option>{packages.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
- </div><p className="text-sm text-[#748498]">The request remains tentative until authorized staff review availability and approve the booking.</p><div className="flex justify-end"><button type="submit" className="btn w-full sm:w-auto">Continue to preferences <ArrowRight size={17}/></button></div></form>:
+ </div>{dateOccupied&&<p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">A Held or Confirmed booking already occupies this date. Walk-in inquiries may still be recorded as Tentative, but cannot be held or confirmed while it is reserved.</p>}<p className="text-sm text-[#748498]">The request remains tentative until authorized staff review availability and approve the booking.</p><div className="flex justify-end"><button type="submit" className="btn w-full sm:w-auto">Continue to preferences <ArrowRight size={17}/></button></div></form>:
  <form onSubmit={submit} className="space-y-6"><div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-2">
- <section className="min-w-0 rounded-xl border border-[#dae4ed] bg-white p-4 sm:p-6"><h3 className="mb-5 text-xl font-semibold">Inspiration image</h3><label className="flex min-h-44 cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-[#b9cfdf] bg-[#f1f6fa] p-5 text-center text-sm text-[#0b4d98]"><UploadCloud size={34}/>{photo||'Choose a JPG, PNG or WebP image (max 1 MB)'}<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={upload}/></label>{form.inspirationAssetId&&<img src={`/api/assets/${form.inspirationAssetId}`} alt="Inspiration preview" className="mt-4 max-h-48 w-full rounded-lg object-contain"/>}</section>
+ <section className="min-w-0 rounded-xl border border-[#dae4ed] bg-white p-4 sm:p-6"><h3 className="mb-5 text-xl font-semibold">Inspiration image</h3><label className="flex min-h-44 cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-[#b9cfdf] bg-[#f1f6fa] p-5 text-center text-sm text-[#0b4d98]"><UploadCloud size={34}/>{photo||'Choose a JPG, PNG or WebP image (max 10 MB)'}<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={upload}/></label>{form.inspirationAssetId&&<img src={`/api/assets/${form.inspirationAssetId}`} alt="Inspiration preview" className="mt-4 max-h-48 w-full rounded-lg object-contain"/>}</section>
  <section className="min-w-0 space-y-4 rounded-xl border border-[#dae4ed] bg-white p-4 sm:p-6"><h3 className="mb-5 text-xl font-semibold">Styling preferences</h3>{textInput('Preferred theme','preferredTheme',{required:false})}{textInput('Color palette','colorPalette',{required:false})}<label className="block"><span className={field}>Additional requests</span><textarea className={input} rows={4} value={form.specialRequests} onChange={e=>set('specialRequests',e.target.value)}/></label></section></div>
  <section className="rounded-xl border border-[#dae4ed] bg-white p-4 sm:p-6"><h3 className="mb-3 text-xl font-semibold">Review and consent</h3><p className="break-words text-sm text-[#122c44]">{form.contactName} • {form.eventType} • {form.eventDate} • {form.venue}</p><p className="mt-2 text-sm text-[#748498]">Client email: {form.contactEmail}. This request is not a confirmed booking or a payment.</p><label className="mt-5 flex cursor-pointer items-start gap-3 text-sm leading-6 text-[#122c44]"><input className="mt-1 size-5 shrink-0 accent-[#0b4d98]" type="checkbox" required checked={consent} onChange={e=>setConsent(e.target.checked)}/><span>I have explained the <Link href="/privacy" target="_blank" className="text-[#0b4d98] underline">Privacy Policy</Link> to the walk-in customer, obtained their acknowledgment, and recorded it here.</span></label></section>
  <div className="flex flex-col gap-3 sm:flex-row sm:justify-between"><button type="button" className="btn btn-ghost" onClick={()=>setStep(1)}><ArrowLeft size={17}/> Back</button><button type="submit" className="btn" disabled={busy||!consent}>{busy?'Saving…':'Submit walk-in request'} <CheckCircle2 size={17}/></button></div></form>}

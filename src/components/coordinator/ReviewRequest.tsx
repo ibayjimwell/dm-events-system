@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
+import { CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { api, json } from '@/api-client/http';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
@@ -39,12 +41,16 @@ export default function ReviewRequest({
   role,
   canUpdateStatus = true,
   canMessage = true,
+  canViewList = true,
 }: {
   id: string;
   role: 'COORDINATOR' | 'ADMIN';
   canUpdateStatus?: boolean;
   canMessage?: boolean;
+  canViewList?: boolean;
 }) {
+  const router = useRouter();
+  const [savedOpen, setSavedOpen] = useState(false);
   const { data, loading, error, refresh } = useLiveQuery(
     () => api<{ booking: Detail }>(`/api/bookings/${id}`),
     [id],
@@ -53,7 +59,6 @@ export default function ReviewRequest({
   const [status, setStatus] = useState<Detail['status']>('TENTATIVE');
   const [value, setValue] = useState('');
   const [note, setNote] = useState('');
-  const [override, setOverride] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState('');
 
@@ -76,12 +81,11 @@ export default function ReviewRequest({
           status,
           bookedValue: value === '' ? null : Number(value),
           note,
-          overrideConflict: override,
+          overrideConflict: false,
         }),
       );
-      await refresh();
-      setOverride(false);
-      setResult('Booking status and history saved. The client will see the new status.');
+      setSavedOpen(true);
+      void refresh().catch((err) => console.error('Booking refresh delayed', err));
     } catch (caught) {
       setResult(caught instanceof Error ? caught.message : 'Unable to save status.');
     } finally {
@@ -240,17 +244,9 @@ export default function ReviewRequest({
                   </Field>
                 </div>
 
-                <label className="flex min-w-0 cursor-pointer items-start gap-3 text-xs leading-relaxed text-[#122c44]">
-                  <input
-                    type="checkbox"
-                    checked={override}
-                    onChange={(event) => setOverride(event.target.checked)}
-                    className="mt-0.5 size-4 shrink-0 accent-[#0b4d98]"
-                  />
-                  <span className="min-w-0">
-                    I checked possible same-date conflicts and intentionally acknowledge any overlap.
-                  </span>
-                </label>
+                <p className="rounded-lg bg-[#f1f6fa] p-3 text-xs leading-relaxed text-[#748498]">
+                  Held and Confirmed events exclusively reserve their date. Double-booking is blocked even for administrators.
+                </p>
 
                 <button type="submit" className="btn w-full" disabled={busy}>
                   {busy ? 'Saving…' : 'Save Status'}
@@ -276,6 +272,24 @@ export default function ReviewRequest({
             </Panel>
           </div>
         )
+      )}
+      {savedOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#071f3b]/65 p-4" role="presentation">
+          <section role="alertdialog" aria-modal="true" aria-labelledby="saved-title" aria-describedby="saved-description"
+            className="w-full max-w-sm rounded-2xl border border-[#dae4ed] bg-white px-6 py-8 text-center shadow-2xl motion-safe:animate-[pulse_400ms_ease-out_1]">
+            <div className="mx-auto mb-5 flex size-20 items-center justify-center rounded-full bg-emerald-50">
+              <CheckCircle2 className="size-12 text-emerald-600 motion-safe:animate-[bounce_650ms_ease-out_1]" strokeWidth={1.8} aria-hidden="true" />
+            </div>
+            <h2 id="saved-title" className="text-2xl font-semibold text-[#122c44]">Changes saved!</h2>
+            <p id="saved-description" className="mt-3 text-sm leading-6 text-[#748498]">
+              Booking status and update history were saved successfully. The client can view the latest information.
+            </p>
+            <button type="button" autoFocus className="btn mt-7 w-full" onClick={() => {
+              setSavedOpen(false);
+              if (canViewList) router.push(role === 'ADMIN' ? '/admin/bookings' : '/coordinator/requests');
+            }}>OK</button>
+          </section>
+        </div>
       )}
     </main>
   );

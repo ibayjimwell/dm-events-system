@@ -149,7 +149,7 @@ export default function SiteNav({
     setMobileOpen(false);
     setSettingsOpen(false);
     await fetch('/api/auth/logout', { method: 'POST' });
-    router.replace('/');
+    router.replace(role === 'CLIENT' || role === 'PUBLIC' ? '/' : '/login');
     router.refresh();
   }
 
@@ -182,7 +182,7 @@ export default function SiteNav({
   return (
     <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#071f3b] text-white shadow-[0_4px_14px_rgba(5,24,45,0.12)]">
       <div className="mx-auto flex min-h-[70px] w-full max-w-[1210px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="brand shrink-0 whitespace-nowrap text-[23px] font-bold leading-none tracking-wide text-white no-underline" aria-label="DM Events home">
+        <Link href={role==='ADMIN'?'/admin':role==='COORDINATOR'?'/coordinator':'/'} className="brand shrink-0 whitespace-nowrap text-[23px] font-bold leading-none tracking-wide text-white no-underline" aria-label="DM Events home">
           DM EVENTS
         </Link>
 

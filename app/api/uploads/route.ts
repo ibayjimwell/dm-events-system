@@ -67,12 +67,12 @@ export const POST = route(async (req) => {
     );
   }
 
-  // Client inspiration and message photos: 1 MB.
-  // Package and hero photos: 5 MB.
+  // Inspiration and package photos: 10 MB; messages: 1 MB, hero: 5 MB.
+  // For 10 MB uploads on Vercel, use signed direct-to-Cloudinary transfer.
   const maxBytes =
-    kind === 'INSPIRATION' || kind === 'MESSAGE'
-      ? 1024 * 1024
-      : 5 * 1024 * 1024;
+    kind === 'INSPIRATION' || kind === 'PACKAGE'
+      ? 10 * 1024 * 1024
+      : kind === 'MESSAGE' ? 1024 * 1024 : 5 * 1024 * 1024;
 
   if (file.size === 0 || file.size > maxBytes) {
     throw new HttpError(
