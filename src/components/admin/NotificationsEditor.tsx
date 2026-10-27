@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { RefreshCw, Mail, MessageSquareText, RotateCcw, Send, Play } from 'lucide-react';
 import { api, json } from '@/api-client/http';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
+import { ListSkeleton } from '@/components/ui/LoadingSkeleton';
 import { PageTitle } from '@/components/ui/Blocks';
 
 type Item = {
@@ -142,6 +143,7 @@ export default function NotificationsEditor() {
       {error && <p className="error break-words" role="alert">{error}</p>}
 
       <section className="grid min-w-0 gap-3">
+        {loading && !data && <ListSkeleton label="Loading notifications" rows={5} />}
         {data?.notifications.map((item) => (
           <article key={item.id} className="min-w-0 rounded-xl border border-[#dae4ed] bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">

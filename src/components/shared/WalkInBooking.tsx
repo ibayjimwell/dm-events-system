@@ -1,4 +1,6 @@
 'use client';
+import { InlineSkeleton } from '@/components/ui/LoadingSkeleton';
+
 import { uploadImage } from '@/api-client/uploadImage';
 import AvailableDatePicker from '@/components/ui/AvailableDatePicker';
 import { assertAvailableDate } from '@/api-client/bookingAvailability';
@@ -20,13 +22,13 @@ const input='w-full min-w-0 rounded-lg border border-[#cbd9e6] bg-white px-3 py-
 
 export default function WalkInBooking({role}:{role:'ADMIN'|'COORDINATOR'}){
  const router=useRouter();const [country,setCountry]=useState<PhoneCountry>('PH');const [form,setForm]=useState<Values>(initial);const [step,setStep]=useState<1|2>(1);
- const [packages,setPackages]=useState<Package[]>([]);const [consent,setConsent]=useState(false);
+ const [packages,setPackages]=useState<Package[]>([]);const [packagesLoading,setPackagesLoading]=useState(true);const [consent,setConsent]=useState(false);
  const [photo,setPhoto]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');
  const [completed,setCompleted]=useState<{id:string;reference:string}|null>(null);
  const base=role==='ADMIN'?'/admin/bookings':'/coordinator/requests';
  const set=(key:keyof Values,value:string)=>setForm(old=>({...old,[key]:value}));
  const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});
- useEffect(()=>{void api<{packages:Package[]}>('/api/packages').then(x=>setPackages(x.packages)).catch(()=>{});},[]);
+ useEffect(()=>{void api<{packages:Package[]}>('/api/packages').then(x=>setPackages(x.packages)).catch(()=>{}).finally(()=>setPackagesLoading(false));},[]);
  async function next(e:FormEvent){
   e.preventDefault();setError('');
   if(!form.eventDate||form.eventDate<today){setError('Select today or a future available date.');return;}
@@ -56,7 +58,7 @@ export default function WalkInBooking({role}:{role:'ADMIN'|'COORDINATOR'}){
  <label className="block min-w-0"><span className={field}>Event type</span><select className={input} value={form.eventType} onChange={e=>set('eventType',e.target.value)}>{['Wedding','Birthday','Debut','Corporate Event','Other'].map(x=><option key={x}>{x}</option>)}</select></label>
  <AvailableDatePicker id="walkin-event-date" label="Preferred date" value={form.eventDate} onChange={value=>{set('eventDate',value);setError('');}} />{textInput('Guest count','guestCount',{type:'number',min:'1'})}
  {textInput('Venue / location','venue')}{textInput('Estimated budget (PHP)','estimatedBudget')}
- <label className="block min-w-0"><span className={field}>Preferred package</span><select className={input} value={form.packageId} onChange={e=>set('packageId',e.target.value)}><option value="">Not decided</option>{packages.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+ <label className="block min-w-0"><span className={field}>Preferred package</span><select className={input} value={form.packageId} onChange={e=>set('packageId',e.target.value)}><option value="">Not decided</option>{packages.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>{packagesLoading&&<InlineSkeleton rows={1} label="Loading package options" />}</label>
  </div><p className="text-sm text-[#748498]">The request remains tentative until authorized staff review availability and approve the booking.</p><div className="flex justify-end"><button type="submit" disabled={busy} className="btn w-full sm:w-auto">{busy?'Checking date…':'Continue to preferences'} <ArrowRight size={17}/></button></div></form>:
  <form onSubmit={submit} className="space-y-6"><div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-2">
  <section className="min-w-0 rounded-xl border border-[#dae4ed] bg-white p-4 sm:p-6"><h3 className="mb-5 text-xl font-semibold">Inspiration image</h3><label className="flex min-h-44 cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-[#b9cfdf] bg-[#f1f6fa] p-5 text-center text-sm text-[#0b4d98]"><UploadCloud size={34}/>{photo||'Choose a JPG, PNG or WebP image (max 10 MB)'}<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={upload}/></label>{form.inspirationAssetId&&<img src={`/api/assets/${form.inspirationAssetId}`} alt="Inspiration preview" className="mt-4 max-h-48 w-full rounded-lg object-contain"/>}</section>

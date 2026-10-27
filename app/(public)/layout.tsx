@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import SiteNav from '@/components/shared/SiteNav';
 import Footer from '@/components/shared/Footer';
 import { actor } from '@/lib/auth';

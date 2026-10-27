@@ -1,4 +1,5 @@
 import { api, json } from '@/api-client/http';
+import { beginApiRequest } from '@/lib/api-activity';
 type DirectKind = 'INSPIRATION'|'PACKAGE';
 const TEN_MB = 10 * 1024 * 1024;
 
@@ -17,7 +18,13 @@ export async function uploadImage(file: File, kind: DirectKind): Promise<Uploade
   data.set('api_key',signed.apiKey);
   data.set('signature',signed.signature);
   for(const [key,value] of Object.entries(signed.params))data.set(key,String(value));
-  const response=await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(signed.cloudName)}/image/upload`,{method:'POST',body:data});
+  const endUpload = beginApiRequest();
+  let response: Response;
+  try {
+    response = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(signed.cloudName)}/image/upload`,{method:'POST',body:data});
+  } finally {
+    endUpload();
+  }
   const result=await response.json().catch(()=>({}));
   if(!response.ok)throw new Error(result?.error?.message||`Cloudinary upload failed (${response.status})`);
   if(result.public_id!==signed.publicId)throw new Error('Uploaded image identity mismatch');

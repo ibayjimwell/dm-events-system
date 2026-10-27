@@ -6,7 +6,9 @@ import { CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { api, json } from '@/api-client/http';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
-import { Panel, PageTitle, Status, Field, niceDate } from '@/components/ui/Blocks';
+import { DetailSkeleton } from '@/components/ui/LoadingSkeleton';
+import { Panel, PageTitle, Status, Field, niceDate, money } from '@/components/ui/Blocks';
+import BookingChangeDialog, { type BookingChange } from '@/components/ui/BookingChangeDialog';
 
 type Detail = {
   id: string;
@@ -51,6 +53,7 @@ export default function ReviewRequest({
 }) {
   const router = useRouter();
   const [savedOpen, setSavedOpen] = useState(false);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
   const { data, loading, error, refresh } = useLiveQuery(
     () => api<{ booking: Detail }>(`/api/bookings/${id}`),
     [id],
@@ -61,17 +64,41 @@ export default function ReviewRequest({
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState('');
+  const [formTouched, setFormTouched] = useState(false);
 
   useEffect(() => {
-    if (booking) {
+    if (booking && !formTouched) {
       setStatus(booking.status);
       setValue(booking.bookedValue || '');
       setNote(booking.reviewNote || '');
     }
-  }, [booking?.id, booking?.status, booking?.bookedValue, booking?.reviewNote]);
+  }, [booking?.id, booking?.status, booking?.bookedValue, booking?.reviewNote, formTouched]);
 
-  async function save(event: FormEvent<HTMLFormElement>) {
+  const normalizedAmount = value.trim() === '' ? null : Number(value);
+  const changes: BookingChange[] = booking ? [
+    ...(status !== booking.status ? [{ label: 'Booking status', before: booking.status, after: status }] : []),
+    ...(Number(booking.bookedValue ?? 0) !== Number(normalizedAmount ?? 0) ||
+      (booking.bookedValue === null) !== (normalizedAmount === null)
+      ? [{ label: 'Agreed booking value', before: booking.bookedValue === null ? 'Not set' : money(booking.bookedValue), after: normalizedAmount === null ? 'Not set' : money(normalizedAmount) }] : []),
+    ...(note.trim() !== (booking.reviewNote || '').trim() ? [{ label: 'Coordinator notes / client update', before: booking.reviewNote || 'Not set', after: note.trim() || 'Not set' }] : []),
+  ] : [];
+
+  function previewSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setResult('');
+    if (!booking || busy) return;
+    if (normalizedAmount !== null && (!Number.isFinite(normalizedAmount) || normalizedAmount < 0)) {
+      setResult('Enter a valid nonnegative booking value.'); return;
+    }
+    if (status === 'CONFIRMED' && (!normalizedAmount || normalizedAmount <= 0)) {
+      setResult('A positive agreed booking value is required to confirm an event.'); return;
+    }
+    if (!changes.length) { setResult('No changes to save.'); return; }
+    setConfirmationOpen(true);
+  }
+
+  async function save() {
+    if (busy || !confirmationOpen || !booking) return;
     setBusy(true);
     setResult('');
     try {
@@ -79,13 +106,15 @@ export default function ReviewRequest({
         `/api/bookings/${id}/status`,
         json('POST', {
           status,
-          bookedValue: value === '' ? null : Number(value),
-          note,
+          bookedValue: normalizedAmount,
+          note: note.trim(),
           overrideConflict: false,
         }),
       );
+      setConfirmationOpen(false);
+      setFormTouched(false);
       setSavedOpen(true);
-      void refresh().catch((err) => console.error('Booking refresh delayed', err));
+      await refresh();
     } catch (caught) {
       setResult(caught instanceof Error ? caught.message : 'Unable to save status.');
     } finally {
@@ -119,7 +148,7 @@ export default function ReviewRequest({
       />
       {error && <p className="error break-words">{error}</p>}
       {loading && !booking ? (
-        <p className="loading">Loading request…</p>
+        <DetailSkeleton />
       ) : (
         booking && (
           <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.8fr)_minmax(290px,1fr)] xl:gap-6">
@@ -203,13 +232,13 @@ export default function ReviewRequest({
                 <p className="hint">Client did not upload a photo.</p>
               )}
 
-              {canUpdateStatus ? <form onSubmit={save} className="mt-7 grid min-w-0 gap-5">
+              {canUpdateStatus ? <form onSubmit={previewSave} className="mt-7 grid min-w-0 gap-5">
                 <div className="min-w-0 [&_.field]:min-w-0">
                   <Field label="Booking status">
                     <select
                       className="w-full min-w-0 max-w-full"
                       value={status}
-                      onChange={(event) => setStatus(event.target.value as Detail['status'])}
+                      onChange={(event) => { setStatus(event.target.value as Detail['status']); setFormTouched(true); }}
                     >
                       <option value="TENTATIVE">Tentative</option>
                       <option value="HELD">Held</option>
@@ -227,7 +256,7 @@ export default function ReviewRequest({
                       min="0"
                       step="0.01"
                       value={value}
-                      onChange={(event) => setValue(event.target.value)}
+                      onChange={(event) => { setValue(event.target.value); setFormTouched(true); }}
                       placeholder="Required to confirm"
                     />
                   </Field>
@@ -238,7 +267,7 @@ export default function ReviewRequest({
                     <textarea
                       className="w-full min-w-0 max-w-full"
                       value={note}
-                      onChange={(event) => setNote(event.target.value)}
+                      onChange={(event) => { setNote(event.target.value); setFormTouched(true); }}
                       placeholder="Status update and next steps"
                     />
                   </Field>
@@ -273,6 +302,15 @@ export default function ReviewRequest({
           </div>
         )
       )}
+      <BookingChangeDialog
+        open={confirmationOpen}
+        reference={booking?.reference ?? ''}
+        changes={changes}
+        error={result}
+        busy={busy}
+        onCancel={() => setConfirmationOpen(false)}
+        onConfirm={() => void save()}
+      />
       {savedOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#071f3b]/65 p-4" role="presentation">
           <section role="alertdialog" aria-modal="true" aria-labelledby="saved-title" aria-describedby="saved-description"

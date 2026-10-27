@@ -132,7 +132,9 @@ export default function AvailableDatePicker({ id, value, onChange, label = 'Pref
           </div>
           <div className="grid grid-cols-7 gap-1 text-center" aria-label={monthLabel}>
             {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <span key={d} className="py-2 text-[11px] font-semibold text-[#75889b]">{d}</span>)}
-            {calendarDays.map((day, index) => {
+            {loading ? Array.from({ length: 35 }, (_, index) => (
+              <span aria-hidden="true" key={`loading-${index}`} className="aspect-square min-h-10 animate-pulse rounded-lg bg-[#e4ecf5]" />
+            )) : calendarDays.map((day, index) => {
               if (day === null) return <span key={`pad-${index}`} aria-hidden="true" />;
               const iso = `${viewMonth}-${pad(day)}`;
               const status = reservations.get(iso);

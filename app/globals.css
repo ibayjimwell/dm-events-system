@@ -834,3 +834,12 @@ h3 {
 .auth-form > .brand {
     display: none;
 }
+
+/* Network activity animation is shared by all SPA navigation and API actions. */
+@keyframes dm-loading {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(320%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse { animation: none !important; }
+}

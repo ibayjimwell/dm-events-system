@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import GlobalNetworkSkeleton from "@/components/ui/GlobalNetworkSkeleton";
 export const metadata: Metadata = {
   title: {
     default: "DM Events | Event Booking & Management",
@@ -15,7 +16,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><GlobalNetworkSkeleton />{children}</body>
     </html>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { api, json } from '@/api-client/http';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
+import { ListSkeleton, InlineSkeleton } from '@/components/ui/LoadingSkeleton';
 import { PageTitle } from '@/components/ui/Blocks';
 import { LockKeyhole, Search, ShieldCheck, UserPlus, Users } from 'lucide-react';
 
@@ -37,7 +38,7 @@ const panel = 'min-w-0 rounded-xl border border-[#dae4ed] bg-white p-4 shadow-sm
 const isEmployee = (user: User) => user.role === 'COORDINATOR' || user.role === 'ADMIN';
 
 export default function UsersEditor() {
-  const { data, error, refresh } = useLiveQuery(() => api<{ users: User[] }>('/api/users'), []);
+  const { data, error, refresh, loading } = useLiveQuery(() => api<{ users: User[] }>('/api/users'), []);
   const users = data?.users ?? [];
   const employees = useMemo(() => users.filter(isEmployee), [data?.users]);
 
@@ -191,6 +192,7 @@ export default function UsersEditor() {
           </div>
           <p className="mb-4 text-xs leading-5 text-[#748498]">Select an employee to edit their module permissions. Client accounts remain manageable here, but their modules are not editable.</p>
           <div className="max-h-[840px] space-y-3 overflow-y-auto pr-1">
+            {loading && !data && <ListSkeleton label="Loading user accounts" />}
             {filteredUsers.map(user => (
               <article
                 key={user.id}
@@ -292,7 +294,7 @@ export default function UsersEditor() {
                 />
               </label>
               {accessError && <p role="alert" className="error mt-3 break-words">{accessError}</p>}
-              {loadingAccess && <p role="status" className="py-8 text-center text-sm text-[#748498]">Loading employee permissions…</p>}
+              {loadingAccess && <InlineSkeleton label="Loading employee permissions" rows={6} />}
 
               {!loadingAccess && selectedEmployee?.role === 'ADMIN' && (
                 <div className="mt-4 flex gap-2 rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-[#215382]">

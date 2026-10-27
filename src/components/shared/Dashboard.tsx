@@ -5,6 +5,7 @@ import type { Permission } from '@/lib/permissions';
 import Link from 'next/link';
 import { api } from '@/api-client/http';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
+import { StatSkeleton, ListSkeleton } from '@/components/ui/LoadingSkeleton';
 import { Panel, Stat, Status, PageTitle, Empty, niceDate, money } from '@/components/ui/Blocks';
 
 type Booking = {
@@ -97,7 +98,7 @@ export default function Dashboard({ role,permissions=[] }: { role: 'CLIENT' | 'C
       <PageTitle title={title} />
       {error && <p className="error break-words">{error}</p>}
 
-      <div className="my-5 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
+      {loading && !data ? <StatSkeleton /> : <div className="my-5 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
         {metrics.map((metric) => (
           <div
             key={metric.label}
@@ -106,10 +107,10 @@ export default function Dashboard({ role,permissions=[] }: { role: 'CLIENT' | 'C
             <Stat label={metric.label} value={metric.value} detail={metric.detail} />
           </div>
         ))}
-      </div>
+      </div>}
 
       {loading && !data ? (
-        <p className="loading">Loading dashboard…</p>
+        <ListSkeleton label="Loading dashboard bookings" />
       ) : (
         <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.85fr)_minmax(270px,1fr)] xl:gap-6">
           <Panel

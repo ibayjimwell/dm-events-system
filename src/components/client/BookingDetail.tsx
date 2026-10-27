@@ -3,8 +3,10 @@
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
+import { DetailSkeleton } from '@/components/ui/LoadingSkeleton';
 import { api, json } from '@/api-client/http';
 import { Panel, PageTitle, Status, niceDate, Field } from '@/components/ui/Blocks';
+import BookingChangeDialog, { type BookingChange } from '@/components/ui/BookingChangeDialog';
 
 type Detail = {
   id: string;
@@ -48,6 +50,7 @@ export default function BookingDetail({ id }: { id: string }) {
   const [requests, setRequests] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
 
   async function cancel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -70,21 +73,35 @@ export default function BookingDetail({ id }: { id: string }) {
     }
   }
 
-  async function save(event: FormEvent<HTMLFormElement>) {
+  const preferenceChanges: BookingChange[] = booking ? [
+    ...(theme.trim() !== (booking.preferredTheme || '').trim() ? [{ label: 'Preferred theme', before: booking.preferredTheme || 'Not set', after: theme.trim() || 'Not set' }] : []),
+    ...(colors.trim() !== (booking.colorPalette || '').trim() ? [{ label: 'Color palette', before: booking.colorPalette || 'Not set', after: colors.trim() || 'Not set' }] : []),
+    ...(requests.trim() !== (booking.specialRequests || '').trim() ? [{ label: 'Special requests', before: booking.specialRequests || 'Not set', after: requests.trim() || 'Not set' }] : []),
+  ] : [];
+
+  function previewSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setMessage('');
+    if (!booking || busy) return;
+    if (!preferenceChanges.length) { setMessage('No changes to save.'); return; }
+    setConfirmationOpen(true);
+  }
+
+  async function save() {
+    if (busy || !confirmationOpen || !booking) return;
     setBusy(true);
     setMessage('');
-
     try {
       await api(
         `/api/bookings/${id}`,
         json('PATCH', {
-          preferredTheme: theme,
-          colorPalette: colors,
-          specialRequests: requests,
+          preferredTheme: theme.trim(),
+          colorPalette: colors.trim(),
+          specialRequests: requests.trim(),
         }),
       );
 
+      setConfirmationOpen(false);
       setEdit(false);
       await refresh();
       setMessage('Preferences updated.');
@@ -128,7 +145,7 @@ export default function BookingDetail({ id }: { id: string }) {
       {error && <p className="error break-words" role="alert">{error}</p>}
 
       {loading && !booking ? (
-        <p className="loading">Loading…</p>
+        <DetailSkeleton />
       ) : (
         booking && (
           <div className="grid min-w-0 grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.8fr)_minmax(290px,1fr)] xl:gap-6">
@@ -244,7 +261,7 @@ export default function BookingDetail({ id }: { id: string }) {
                 </div>
 
                 {edit && ['TENTATIVE', 'HELD'].includes(booking.status) && (
-                  <form onSubmit={save} className="mt-5 grid min-w-0 gap-4">
+                  <form onSubmit={previewSave} className="mt-5 grid min-w-0 gap-4">
                     <div className="min-w-0">
                       <Field label="Theme">
                         <input
@@ -324,6 +341,15 @@ export default function BookingDetail({ id }: { id: string }) {
           </div>
         )
       )}
+      <BookingChangeDialog
+        open={confirmationOpen}
+        reference={booking?.reference ?? ''}
+        changes={preferenceChanges}
+        error={message}
+        busy={busy}
+        onCancel={() => setConfirmationOpen(false)}
+        onConfirm={() => void save()}
+      />
     </main>
   );
 }

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { beginApiRequest } from '@/lib/api-activity';
 import { ChevronDown, ChevronRight, LogOut, Menu, Settings2, X } from 'lucide-react';
 import type { Role } from '@/lib/auth';
 import type { Permission } from '@/lib/permissions';
@@ -148,7 +149,12 @@ export default function SiteNav({
   async function signOut() {
     setMobileOpen(false);
     setSettingsOpen(false);
-    await fetch('/api/auth/logout', { method: 'POST' });
+    const done = beginApiRequest();
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      done();
+    }
     router.replace(role === 'CLIENT' || role === 'PUBLIC' ? '/' : '/login');
     router.refresh();
   }

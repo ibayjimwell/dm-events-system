@@ -5,6 +5,7 @@ import type { Permission } from '@/lib/permissions';
 import Link from 'next/link';
 import { api } from '@/api-client/http';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
+import { StatSkeleton, ListSkeleton } from '@/components/ui/LoadingSkeleton';
 import { Panel, Stat, PageTitle, money } from '@/components/ui/Blocks';
 
 type Summary = {
@@ -52,7 +53,7 @@ export default function Overview({permissions=[]}:{permissions?:Permission[]}) {
       {analytics.error && <div className="error break-words">{analytics.error}</div>}
 
       {/* Do not use global .stats: this grid changes at every breakpoint. */}
-      <div className="my-5 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
+      {summary.loading && !summary.data ? <StatSkeleton /> : <div className="my-5 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
         {metrics.map((metric) => (
           <div
             key={metric.label}
@@ -61,12 +62,12 @@ export default function Overview({permissions=[]}:{permissions?:Permission[]}) {
             <Stat label={metric.label} value={metric.value} detail={metric.detail} />
           </div>
         ))}
-      </div>
+      </div>}
 
       <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.85fr)_minmax(270px,1fr)] xl:gap-6">
         <Panel title="Operations snapshot" className="min-w-0 overflow-hidden">
           {/* Small screens: readable cards instead of a table wider than the viewport. */}
-          <div className="space-y-3 md:hidden">
+          <div className="space-y-3 md:hidden">{analytics.loading && !analytics.data && canAnalytics && <ListSkeleton rows={3} />}
             {months.map((month) => (
               <article key={month.month} className="min-w-0 rounded-lg border border-[#dae4ed] bg-[#f8fbfe] p-4">
                 <h4 className="text-base font-semibold text-[#122c44]">

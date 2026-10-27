@@ -3,13 +3,14 @@ import { useState, type FormEvent } from 'react';
 import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
 import { api, json } from '@/api-client/http';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
+import { DetailSkeleton } from '@/components/ui/LoadingSkeleton';
 import { Panel, Field, PageTitle } from '@/components/ui/Blocks';
 import CountryPhoneInput from '@/components/ui/CountryPhoneInput';
 import { normalizePhoneNumber, type PhoneCountry } from '@/lib/validators';
 
 type User = { fullName: string; email: string; phone: string | null; role: string };
 export default function Profile() {
-  const { data, refresh } = useLiveQuery(() => api<{ user: User }>('/api/auth/me'), []);
+  const { data, refresh, loading, error } = useLiveQuery(() => api<{ user: User }>('/api/auth/me'), []);
   const u = data?.user;
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -46,7 +47,7 @@ export default function Profile() {
   return (
     <main className="page-wrap page-space min-w-0">
       <PageTitle title="My profile" subtitle="Manage your account contact information." />
-      <div className="max-w-2xl"><Panel title="Account details">
+      {error && <p role="alert" className="error">{error}</p>}{loading && !data ? <DetailSkeleton label="Loading profile" /> : <div className="max-w-2xl"><Panel title="Account details">
         {u && <div className="grid min-w-0 gap-5">
           {editing ? <form className="grid min-w-0 gap-5" onSubmit={submit}>
             <Field label="Full name"><input required value={name} onChange={(event) => setName(event.target.value)} /></Field>
@@ -61,7 +62,7 @@ export default function Profile() {
           </>}
           {status && <p role="status" className="notice break-words">{status}</p>}
         </div>}
-      </Panel></div>
+      </Panel></div>}
     </main>
   );
 }
