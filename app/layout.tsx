@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./marketing.css";
 import GlobalNetworkSkeleton from "@/components/ui/GlobalNetworkSkeleton";
 export const metadata: Metadata = {
   title: {

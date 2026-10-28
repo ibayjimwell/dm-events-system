@@ -1,3 +1,25 @@
-export const dynamic='force-dynamic';
-import Link from 'next/link';import {db} from '@/db';import {packages} from '@/db/schema';import {eq,asc} from 'drizzle-orm';
-export default async function Packages(){const data=await db.select().from(packages).where(eq(packages.published,true)).orderBy(asc(packages.sortOrder));return <main className="page-wrap page-space"><h2>Explore our event packages</h2><p className="hint" style={{marginTop:10}}>Package information is managed by DM Events. Availability and final quotations require confirmation.</p><div className="package-grid">{data.map((p,i)=><article className="package-card" key={p.id}><div className={`package-banner shade${i%3+1} relative isolate overflow-hidden`}>{p.imageId&&<><img src={`/api/assets/${p.imageId}`} alt={`${p.name} package`} className="absolute inset-0 -z-20 h-full w-full object-cover"/><div className="absolute inset-0 -z-10 bg-[#001b3b]/50"/></>}{p.name}</div><div className="package-body"><strong style={{fontSize:14}}>{p.description}</strong><p className="hint">{p.inclusions.join(' • ')}</p><Link href={`/packages/${p.id}`} className="btn">Inquire / Select</Link></div></article>)}</div>{data.length===0&&<p className="hint">Packages are being prepared. Contact DM Events for current offerings.</p>}</main>}
+import Link from 'next/link';
+import { asc, eq } from 'drizzle-orm';
+import { ArrowLeft, ArrowRight, Sparkles } from 'lucide-react';
+import { db } from '@/db';
+import { packages } from '@/db/schema';
+import PackageShowcaseCard from '@/components/marketing/PackageShowcaseCard';
+import { currentSite } from '@/models/read';
+import { normalizeHomepage } from '@/lib/sitePresentation';
+
+export const dynamic = 'force-dynamic';
+export default async function Packages() {
+  const [data, site] = await Promise.all([
+    db.select().from(packages).where(eq(packages.published, true)).orderBy(asc(packages.sortOrder), asc(packages.name)),
+    currentSite(),
+  ]);
+  const homepage = normalizeHomepage(site?.homepage);
+  return <main className="dm-marketing dm-catalog">
+    <header className="dm-catalog__header"><div className="dm-marketing__container"><Link className="dm-back-link" href="/"><ArrowLeft size={16} /> Back to home</Link><p className="dm-eyebrow dm-eyebrow--light"><span className="dm-line" />{homepage.packagesEyebrow}</p><h1>{homepage.packagesTitle}</h1><p>{homepage.packagesBody}</p></div></header>
+    <section className="dm-marketing__container dm-catalog__content" aria-label="Available event packages">
+      <div className="dm-catalog__summary"><div><span>EXPLORE THE COLLECTION</span><h2>Event packages</h2></div><p>{data.length} {data.length === 1 ? 'package' : 'packages'} available to explore</p></div>
+      {data.length ? <div className="dm-showcase-grid">{data.map((item,i)=><PackageShowcaseCard key={item.id} item={item} index={i} />)}</div> : <div className="dm-empty-packages"><Sparkles size={32} /><h3>Packages are coming soon</h3><p>Our offerings are being prepared. You can still request a personalized event consultation.</p><Link className="dm-button dm-button--dark" href="/client/book">Tell us about your event <ArrowRight size={17} /></Link></div>}
+    </section>
+    <div className="dm-marketing__container dm-catalog__foot"><p>Dates and final quotations are confirmed individually by DM Events. A request does not reserve a date.</p><Link href="/client/book" className="dm-text-link">Have something else in mind? <ArrowRight size={17} /></Link></div>
+  </main>;
+}

@@ -121,7 +121,7 @@ export default function Overview({permissions=[]}:{permissions?:Permission[]}) {
             <p className="hint py-4">Confirmed booking summaries will appear here after coordinator approval.</p>
           )}
           <p className="hint mt-6">
-            Reporting is based on confirmation month. These figures are not received income,
+            Movements are dated in Philippine time and include later adjustments. These figures are not received income,
             revenue or profit.
           </p>
         </Panel>

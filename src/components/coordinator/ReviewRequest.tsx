@@ -9,6 +9,7 @@ import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { DetailSkeleton } from '@/components/ui/LoadingSkeleton';
 import { Panel, PageTitle, Status, Field, niceDate, money } from '@/components/ui/Blocks';
 import BookingChangeDialog, { type BookingChange } from '@/components/ui/BookingChangeDialog';
+import EventScheduleEditor from '@/components/coordinator/EventScheduleEditor';
 
 type Detail = {
   id: string;
@@ -24,6 +25,11 @@ type Detail = {
   inspirationAssetId: string | null;
   status: 'TENTATIVE' | 'HELD' | 'CONFIRMED' | 'CANCELLED';
   bookedValue: string | null;
+  updatedAt: string;
+  eventStartTime: string | null;
+  eventEndTime: string | null;
+  assignedCoordinatorId: string | null;
+  scheduleNotes: string;
   reviewNote: string | null;
   cancellationRequestedAt: string | null;
   cancellationReason: string | null;
@@ -65,12 +71,15 @@ export default function ReviewRequest({
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState('');
   const [formTouched, setFormTouched] = useState(false);
+  const [editingVersion, setEditingVersion] = useState('');
+  const markEdited = () => { if (!formTouched) setEditingVersion(booking?.updatedAt ?? ''); setFormTouched(true); };
 
   useEffect(() => {
     if (booking && !formTouched) {
       setStatus(booking.status);
       setValue(booking.bookedValue || '');
       setNote(booking.reviewNote || '');
+      setEditingVersion(booking.updatedAt);
     }
   }, [booking?.id, booking?.status, booking?.bookedValue, booking?.reviewNote, formTouched]);
 
@@ -109,10 +118,12 @@ export default function ReviewRequest({
           bookedValue: normalizedAmount,
           note: note.trim(),
           overrideConflict: false,
+          expectedUpdatedAt: editingVersion || booking.updatedAt,
         }),
       );
       setConfirmationOpen(false);
       setFormTouched(false);
+      setEditingVersion('');
       setSavedOpen(true);
       await refresh();
     } catch (caught) {
@@ -128,6 +139,7 @@ export default function ReviewRequest({
         { label: 'Email', value: booking.client.email },
         { label: 'Contact', value: booking.client.phone || '—' },
         { label: 'Preferred date', value: niceDate(booking.eventDate) },
+        { label: 'Event time', value: booking.eventStartTime && booking.eventEndTime ? `${booking.eventStartTime}–${booking.eventEndTime}` : 'Not scheduled yet' },
         { label: 'Venue', value: booking.venue },
         { label: 'Guest count', value: String(booking.guestCount) },
         { label: 'Budget', value: booking.estimatedBudget },
@@ -238,11 +250,11 @@ export default function ReviewRequest({
                     <select
                       className="w-full min-w-0 max-w-full"
                       value={status}
-                      onChange={(event) => { setStatus(event.target.value as Detail['status']); setFormTouched(true); }}
+                      onChange={(event) => { setStatus(event.target.value as Detail['status']); markEdited(); }}
                     >
-                      <option value="TENTATIVE">Tentative</option>
-                      <option value="HELD">Held</option>
-                      <option value="CONFIRMED">Confirmed</option>
+                      <option value="TENTATIVE" disabled={booking.status === 'CONFIRMED' || booking.status === 'CANCELLED'}>Tentative</option>
+                      <option value="HELD" disabled={booking.status === 'CONFIRMED' || booking.status === 'CANCELLED'}>Held</option>
+                      <option value="CONFIRMED" disabled={booking.status === 'CANCELLED'}>Confirmed</option>
                       <option value="CANCELLED">Cancelled</option>
                     </select>
                   </Field>
@@ -256,7 +268,7 @@ export default function ReviewRequest({
                       min="0"
                       step="0.01"
                       value={value}
-                      onChange={(event) => { setValue(event.target.value); setFormTouched(true); }}
+                      onChange={(event) => { setValue(event.target.value); markEdited(); }}
                       placeholder="Required to confirm"
                     />
                   </Field>
@@ -267,7 +279,7 @@ export default function ReviewRequest({
                     <textarea
                       className="w-full min-w-0 max-w-full"
                       value={note}
-                      onChange={(event) => { setNote(event.target.value); setFormTouched(true); }}
+                      onChange={(event) => { setNote(event.target.value); markEdited(); }}
                       placeholder="Status update and next steps"
                     />
                   </Field>
@@ -282,6 +294,8 @@ export default function ReviewRequest({
                 </button>
                 {result && <p className="notice break-words [overflow-wrap:anywhere]" role="status">{result}</p>}
               </form> : <p className="notice mt-5">This account has review access but not permission to change booking status.</p>}
+
+              <EventScheduleEditor booking={booking} canEdit={canUpdateStatus} onSaved={refresh} />
 
               {canMessage && <Link
                 href={role === 'ADMIN' ? `/admin/messages?booking=${id}` : `/coordinator/messages?booking=${id}`}

@@ -16,6 +16,7 @@ export default async function AdminLayout({
   const adminModules = [
     "dashboard.admin",
     "analytics.view",
+    "calendar.view",
     "bookings.view.all",
     "bookings.create.walkin",
     "packages.manage",

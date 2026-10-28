@@ -13,6 +13,8 @@ type Detail = {
   reference: string;
   eventType: string;
   eventDate: string;
+  eventStartTime: string | null;
+  eventEndTime: string | null;
   venue: string;
   status: string;
   guestCount: number;
@@ -123,6 +125,7 @@ export default function BookingDetail({ id }: { id: string }) {
   const details: DetailRow[] = booking
     ? [
         { label: 'Requested date', value: niceDate(booking.eventDate) },
+        ...(['HELD','CONFIRMED'].includes(booking.status) && booking.eventStartTime && booking.eventEndTime ? [{ label: 'Coordinated event time (PH)', value: `${booking.eventStartTime}–${booking.eventEndTime}` }] : []),
         { label: 'Venue', value: booking.venue },
         { label: 'Guests', value: String(booking.guestCount) },
         { label: 'Estimated budget', value: booking.estimatedBudget },

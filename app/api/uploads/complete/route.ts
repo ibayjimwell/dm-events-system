@@ -23,12 +23,12 @@ export const POST = route(async req => {
   await authorizeImageKind(user, v.kind);
   if (v.expiresAt < Date.now() || v.expiresAt > Date.now()+16*60_000) throw new HttpError(400, 'Upload authorization expired. Choose the photo again.');
   const prefix=`dm-events/${v.kind.toLowerCase()}/${v.kind.toLowerCase()}_`;
-  if (!v.publicId.startsWith(prefix) || !/^dm-events\/(inspiration|package)\/[a-z]+_[0-9a-f]{32}$/.test(v.publicId)) throw new HttpError(400,'Invalid Cloudinary image identifier');
+  if (!v.publicId.startsWith(prefix) || !/^dm-events\/(inspiration|package|hero)\/[a-z]+_[0-9a-f]{32}$/.test(v.publicId)) throw new HttpError(400,'Invalid Cloudinary image identifier');
   const secret=process.env.CLOUDINARY_API_SECRET;
   if(!secret)throw new HttpError(503,'Cloudinary unavailable');
   const calculated=createHmac('sha256',secret).update(`${user.id}|${v.kind}|${v.publicId}|${v.expiresAt}`).digest('hex');
   if(!timingSafeEqual(Buffer.from(calculated,'hex'),Buffer.from(v.ticket,'hex')))throw new HttpError(403,'Invalid upload receipt');
-  const deliveryType=v.kind==='PACKAGE'?'upload':'authenticated';
+  const deliveryType=v.kind==='PACKAGE'||v.kind==='HERO'?'upload':'authenticated';
   let image: {public_id:string;format:string;bytes:number;resource_type:string;type:string;created_at:string};
   try {
     image=await cloud().api.resource(v.publicId,{resource_type:'image',type:deliveryType});

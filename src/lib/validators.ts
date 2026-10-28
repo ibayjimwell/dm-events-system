@@ -169,8 +169,12 @@ export const messageInput = messageReadInput
 export const statusInput = z.object({
   status: z.enum(['TENTATIVE', 'HELD', 'CONFIRMED', 'CANCELLED']),
   note: z.string().max(3000).optional(),
-  bookedValue: z.number().nonnegative().max(999999999).nullable().optional(),
+  bookedValue: z.number().finite().nonnegative().max(999999999)
+    .refine(value => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6,
+      'Use at most two decimal places for Philippine peso amounts.')
+    .nullable().optional(),
   overrideConflict: z.boolean().default(false),
+  expectedUpdatedAt: z.string().datetime({ offset: true }).optional(),
 });
 
 export const packageInput = z.object({

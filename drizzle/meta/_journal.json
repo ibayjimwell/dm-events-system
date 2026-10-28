@@ -36,6 +36,20 @@
       "when": 1793000000000,
       "tag": "0004_prevent_double_bookings",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793200000000,
+      "tag": "0005_operational_scheduling_value_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793230000000,
+      "tag": "0006_public_homepage_content",
+      "breakpoints": true
     }
   ]
 }

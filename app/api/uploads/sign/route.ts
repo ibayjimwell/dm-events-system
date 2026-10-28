@@ -27,7 +27,7 @@ export const POST = route(async req => {
   const publicId = `${v.kind.toLowerCase()}_${randomUUID().replaceAll('-','')}`;
   const fullPublicId = `${folder}/${publicId}`;
   const timestamp = Math.floor(Date.now()/1000);
-  const deliveryType = v.kind==='PACKAGE' ? 'upload' : 'authenticated';
+  const deliveryType = v.kind==='PACKAGE' || v.kind==='HERO' ? 'upload' : 'authenticated';
   const params = {folder, public_id:publicId, timestamp, type:deliveryType, overwrite:'false', unique_filename:'false'};
   const signature = provider.utils.api_sign_request(params, secret);
   // A short-lived, user-bound receipt required before saving uploaded metadata.

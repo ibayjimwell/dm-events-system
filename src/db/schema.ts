@@ -169,6 +169,12 @@ export const bookings = pgTable(
     ),
     status: statuses("status").notNull().default("TENTATIVE"),
     bookedValue: numeric("booked_value", { precision: 14, scale: 2 }),
+    // Staff maintain operational timing separately from a client's preferred event date.
+    eventStartTime: varchar("event_start_time", { length: 5 }),
+    eventEndTime: varchar("event_end_time", { length: 5 }),
+    assignedCoordinatorId: uuid("assigned_coordinator_id").references(() => users.id, { onDelete: "set null" }),
+    scheduleNotes: text("schedule_notes").notNull().default(""),
+    scheduleUpdatedAt: timestamp("schedule_updated_at", { withTimezone: true }),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     reviewNote: text("review_note"),
     cancellationRequestedAt: timestamp("cancellation_requested_at", {
@@ -182,6 +188,8 @@ export const bookings = pgTable(
   },
   (t) => [
     index("bookings_client_idx").on(t.clientId),
+    index("bookings_assigned_coordinator_idx").on(t.assignedCoordinatorId, t.eventDate),
+    check("booking_times_pair_check", sql`(${t.eventStartTime} IS NULL AND ${t.eventEndTime} IS NULL) OR (${t.eventStartTime} IS NOT NULL AND ${t.eventEndTime} IS NOT NULL AND ${t.eventStartTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' AND ${t.eventEndTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' AND ${t.eventStartTime} < ${t.eventEndTime})`),
     index("bookings_date_idx").on(t.eventDate),
     uniqueIndex("bookings_one_reserved_date").on(t.eventDate).where(sql`${t.status} IN ('HELD','CONFIRMED')`),
     index("bookings_status_idx").on(t.status),
@@ -189,6 +197,28 @@ export const bookings = pgTable(
     check("bookings_source_check", sql`${t.source} IN ('ONLINE','WALK_IN')`),
   ],
 );
+/** Immutable financial changes; monthly confirmation reporting must not rewrite history. */
+export const bookingValueEvents = pgTable(
+  "booking_value_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bookingId: uuid("booking_id").notNull().references(() => bookings.id, { onDelete: "restrict" }),
+    actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }),
+    eventType: varchar("event_type", { length: 20 }).notNull(),
+    amountDelta: numeric("amount_delta", { precision: 14, scale: 2 }).notNull(),
+    valueAfter: numeric("value_after", { precision: 14, scale: 2 }).notNull(),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+    note: text("note"),
+  },
+  (t) => [
+    index("booking_value_events_month_idx").on(t.recordedAt),
+    index("booking_value_events_booking_idx").on(t.bookingId),
+    check("booking_value_events_type_check", sql`${t.eventType} IN ('CONFIRMATION','ADJUSTMENT','REVERSAL')`),
+    check("booking_value_events_value_after_check", sql`${t.valueAfter} >= 0`),
+    check("booking_value_events_nonzero_check", sql`${t.amountDelta} <> 0`),
+  ],
+);
+
 export const bookingHistory = pgTable(
   "booking_history",
   {
@@ -261,6 +291,7 @@ export const siteContent = pgTable("site_content", {
   contactEmail: text("contact_email").notNull().default(""),
   contactPhone: text("contact_phone").notNull().default(""),
   privacyPolicy: text("privacy_policy").notNull().default(""),
+  homepage: jsonb("homepage").notNull().default(sql`'{}'::jsonb`),
   draft: jsonb("draft"),
   ...timestamps(),
 });

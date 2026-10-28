@@ -1,6 +1,6 @@
 import { api, json } from '@/api-client/http';
 import { beginApiRequest } from '@/lib/api-activity';
-type DirectKind = 'INSPIRATION'|'PACKAGE';
+type DirectKind = 'INSPIRATION'|'PACKAGE'|'HERO';
 const TEN_MB = 10 * 1024 * 1024;
 
 export type UploadedImage = { id: string; name: string; storedName: string; url: string };

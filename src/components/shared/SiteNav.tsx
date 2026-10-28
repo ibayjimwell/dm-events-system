@@ -39,6 +39,7 @@ const coordinatorLinks: NavItem[] = [
 const adminLinks: NavItem[] = [
   { href: '/admin', label: 'Overview', permission: 'dashboard.admin' },
   { href: '/admin/analytics', label: 'Analytics', permission: 'analytics.view' },
+  { href: '/admin/calendar', label: 'Schedule', permission: 'calendar.view' },
   { href: '/admin/bookings', label: 'Bookings', permission: 'bookings.view.all' },
 ];
 
