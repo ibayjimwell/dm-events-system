@@ -4,8 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { api, json } from '@/api-client/http';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { ListSkeleton, InlineSkeleton } from '@/components/ui/LoadingSkeleton';
-import { PageTitle } from '@/components/ui/Blocks';
-import { LockKeyhole, Search, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { LockKeyhole, Search, ShieldCheck, UserPlus, Users, UserRoundCheck, UserRoundX } from 'lucide-react';
 
 type Role = 'CLIENT' | 'COORDINATOR' | 'ADMIN';
 type User = {
@@ -50,6 +49,7 @@ export default function UsersEditor() {
   const [savingPermission, setSavingPermission] = useState<string | null>(null);
   const [updatingUser, setUpdatingUser] = useState<string | null>(null);
   const [accountFilter, setAccountFilter] = useState<AccountFilter>('ALL');
+  const [accountSearch, setAccountSearch] = useState('');
   const [moduleSearch, setModuleSearch] = useState('');
 
   const [name, setName] = useState('');
@@ -86,6 +86,7 @@ export default function UsersEditor() {
   const selectedEmployee = employees.find(employee => employee.id === selectedEmployeeId);
   const filteredUsers = users
     .filter(user => accountFilter === 'ALL' || (accountFilter === 'STAFF' ? isEmployee(user) : user.role === 'CLIENT'))
+    .filter(user => `${user.fullName} ${user.email}`.toLowerCase().includes(accountSearch.trim().toLowerCase()))
     .sort((a, b) => Number(isEmployee(b)) - Number(isEmployee(a)) || a.fullName.localeCompare(b.fullName));
   const shownModules = (access?.user.id === selectedEmployeeId ? access.modules : []).filter(module =>
     // Client self-service actions are fixed and do not belong in the employee editor.
@@ -118,6 +119,11 @@ export default function UsersEditor() {
   }
 
   async function changeUser(user: User, update: Partial<Pick<User, 'role' | 'isActive'>>) {
+    // Roles reset individual overrides and deactivation immediately removes access.
+    if (update.role && update.role !== user.role &&
+        !window.confirm(`Change ${user.fullName}'s role from ${user.role} to ${update.role}? This resets individual module overrides.`)) return;
+    if (update.isActive === false && user.isActive &&
+        !window.confirm(`Deactivate ${user.fullName}? They will lose access to DM Events.`)) return;
     setUpdatingUser(user.id);
     setNotice('');
     try {
@@ -158,16 +164,18 @@ export default function UsersEditor() {
   }
 
   return (
-    <main className="page-wrap page-space min-w-0">
-      <PageTitle
-        title="Website roles & access"
-        subtitle="Manage all accounts and grant individual modules to DM Events employees. Client permissions are fixed."
-      />
+    <main className="page-wrap page-space min-w-0 workspace">
+      <section className="workspace-hero"><div className="workspace-hero__top"><div><span className="workspace-kicker"><ShieldCheck size={15}/> ACCOUNTS & AUTHORIZATION</span><h1>People, roles & access</h1><p>Manage Client and employee accounts, then assign module access to Coordinators without exposing Administrator privileges.</p></div></div></section>
+      <div className="workspace-metrics">
+        <div className="workspace-metric"><div className="workspace-metric__icon"><Users size={19}/></div><div className="workspace-metric__label">Total accounts</div><div className="workspace-metric__value">{users.length}</div><div className="workspace-metric__hint">Employees and Clients</div></div>
+        <div className="workspace-metric"><div className="workspace-metric__icon"><UserRoundCheck size={19}/></div><div className="workspace-metric__label">Active accounts</div><div className="workspace-metric__value">{users.filter(user => user.isActive).length}</div><div className="workspace-metric__hint">Accounts currently enabled</div></div>
+        <div className="workspace-metric"><div className="workspace-metric__icon"><UserRoundX size={19}/></div><div className="workspace-metric__label">Inactive accounts</div><div className="workspace-metric__value">{users.filter(user => !user.isActive).length}</div><div className="workspace-metric__hint">Access disabled by administrators</div></div>
+      </div>
       {error && <p role="alert" className="error break-words">{error}</p>}
       {notice && <p role="status" className="notice mb-5 break-words">{notice}</p>}
 
       {/* Desktop: Accounts → Permissions → Create Account. Mobile: same order, stacked. */}
-      <div className="grid min-w-0 grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)_minmax(0,0.88fr)]">
+      <div className="workspace-section grid min-w-0 grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)_minmax(0,0.88fr)]">
         <section className={panel} aria-labelledby="account-list-heading">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h3 id="account-list-heading" className="!m-0 flex items-center gap-2 text-xl font-semibold">
@@ -190,7 +198,11 @@ export default function UsersEditor() {
               </button>
             ))}
           </div>
-          <p className="mb-4 text-xs leading-5 text-[#748498]">Select an employee to edit their module permissions. Client accounts remain manageable here, but their modules are not editable.</p>
+          <label className="relative mb-3 block text-xs font-semibold text-[#33495f]">Find an account
+            <Search size={16} className="pointer-events-none absolute bottom-3 left-3 text-[#72849a]" />
+            <input className={`${control} pl-9`} value={accountSearch} onChange={event => setAccountSearch(event.target.value)} placeholder="Search name or email" type="search" />
+          </label>
+          <p className="mb-4 text-xs leading-5 text-[#748498]">Select an employee to edit module permissions. Client permissions remain fixed.</p>
           <div className="max-h-[840px] space-y-3 overflow-y-auto pr-1">
             {loading && !data && <ListSkeleton label="Loading user accounts" />}
             {filteredUsers.map(user => (

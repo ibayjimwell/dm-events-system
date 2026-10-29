@@ -1,209 +1,68 @@
-
 'use client';
 
-import type { Permission } from '@/lib/permissions';
 import Link from 'next/link';
+import type { Permission } from '@/lib/permissions';
+import { CalendarDays, ArrowUpRight, MessageCircleMore, ClipboardList, CheckCircle2, Clock3, Sparkles, ShieldCheck, BarChart3, Package, UsersRound, CalendarPlus2, ArrowRight } from 'lucide-react';
 import { api } from '@/api-client/http';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { StatSkeleton, ListSkeleton } from '@/components/ui/LoadingSkeleton';
-import { Panel, Stat, Status, PageTitle, Empty, niceDate, money } from '@/components/ui/Blocks';
+import { Status, niceDate, money } from '@/components/ui/Blocks';
 
-type Booking = {
-  id: string;
-  reference: string;
-  clientName: string;
-  eventType: string;
-  eventDate: string;
-  status: string;
-};
+type Booking = { id:string; reference:string;clientName:string;eventType:string;eventDate:string;status:string };
+type Summary = { counts:{all:number;confirmed:number;tentative:number;held:number;active:number;unread:number;monthlyValue:number};recent:Booking[] };
+type Role = 'CLIENT'|'COORDINATOR'|'ADMIN';
 
-type Summary = {
-  counts: {
-    all: number;
-    confirmed: number;
-    tentative: number;
-    held: number;
-    active: number;
-    unread: number;
-    monthlyValue: number;
-  };
-  recent: Booking[];
-};
+type QuickAction = {label:string;detail:string;href:string;permission?:Permission;Icon:typeof CalendarDays};
 
-type Metric = { label: string; value: string | number; detail: string };
-
-export default function Dashboard({ role,permissions=[] }: { role: 'CLIENT' | 'COORDINATOR' | 'ADMIN';permissions?:Permission[] }) {
-  const { data, loading, error } = useLiveQuery(() => api<Summary>('/api/summary'), []);
-  const isClient = role === 'CLIENT';
-  const isAdmin = role === 'ADMIN';
-
-  const title = isClient
-    ? 'My event dashboard'
-    : isAdmin
-      ? 'Administrator overview'
-      : 'Coordinator dashboard';
-
-  const metrics: Metric[] = isClient
-    ? [
-        { label: 'Active Requests', value: data?.counts.active ?? 0, detail: 'Requests awaiting or under review' },
-        { label: 'Confirmed Bookings', value: data?.counts.confirmed ?? 0, detail: 'Confirmed dates and packages' },
-        { label: 'Unread Messages', value: data?.counts.unread ?? 0, detail: 'Conversation with DM Events' },
-      ]
-    : isAdmin
-      ? [
-          { label: 'Total Requests', value: data?.counts.all ?? 0, detail: 'Recorded booking inquiries' },
-          { label: 'Confirmed Bookings', value: data?.counts.confirmed ?? 0, detail: 'Approved dates and packages' },
-          { label: 'Monthly Booking Value', value: money(data?.counts.monthlyValue), detail: 'Confirmed value; not income received' },
-        ]
-      : [
-          { label: 'New Inquiries', value: data?.counts.tentative ?? 0, detail: 'Requires review' },
-          { label: 'Tentative / Held', value: data?.counts.active ?? 0, detail: 'Pending confirmation' },
-          { label: 'Confirmed Events', value: data?.counts.confirmed ?? 0, detail: 'Scheduled events' },
-        ];
-
-  const bookingHref = (booking: Booking) =>
-    isClient
-      ? `/client/bookings/${booking.id}`
-      : isAdmin
-        ? `/admin/bookings/${booking.id}`
-        : `/coordinator/requests/${booking.id}`;
-
-  const actions: { text: string; href: string }[] = isClient
-    ? [
-        { text: 'View my bookings', href: '/client/bookings' },
-        { text: 'Send a message', href: '/client/messages' },
-        { text: 'Request an event', href: '/client/book' },
-      ]
-    : isAdmin
-      ? [
-          { text: 'Monthly analytics', href: '/admin/analytics' },
-          { text: 'Manage packages', href: '/admin/maintenance/packages' },
-          { text: 'Website maintenance', href: '/admin/maintenance/content' },
-          { text: 'User access', href: '/admin/maintenance/users' },
-        ]
-      : [
-          { text: 'Review requests', href: '/coordinator/requests' },
-          { text: 'Check the calendar', href: '/coordinator/calendar' },
-          { text: 'Reply to messages', href: '/coordinator/messages' },
-        ];
-
-  const allowedActions=actions.filter(action=>{const key:Record<string,Permission>={
-    '/client/bookings':'bookings.view.own','/client/messages':'messages.own','/client/book':'bookings.create.own',
-    '/coordinator/requests':'bookings.view.all','/coordinator/calendar':'calendar.view','/coordinator/messages':'messages.staff',
-    '/admin/analytics':'analytics.view','/admin/maintenance/packages':'packages.manage','/admin/maintenance/content':'content.manage','/admin/maintenance/users':'users.manage'};
-    return !key[action.href]||permissions.includes(key[action.href]);
-  });
-  return (
-    <main className="page-wrap page-space min-w-0">
-      <PageTitle title={title} />
-      {error && <p className="error break-words">{error}</p>}
-
-      {loading && !data ? <StatSkeleton /> : <div className="my-5 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
-        {metrics.map((metric) => (
-          <div
-            key={metric.label}
-            className="min-w-0 [&_.stat]:h-full [&_.stat]:min-w-0 [&_.stat]:p-4 sm:[&_.stat]:p-5 [&_.stat-value]:break-words [&_.stat-value]:text-3xl sm:[&_.stat-value]:text-4xl"
-          >
-            <Stat label={metric.label} value={metric.value} detail={metric.detail} />
-          </div>
-        ))}
-      </div>}
-
-      {loading && !data ? (
-        <ListSkeleton label="Loading dashboard bookings" />
-      ) : (
-        <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.85fr)_minmax(270px,1fr)] xl:gap-6">
-          <Panel
-            className="min-w-0 overflow-hidden"
-            title={isClient ? 'My booking requests' : isAdmin ? 'Operations snapshot' : 'Recent client requests'}
-          >
-            {/* Mobile and tablet booking cards: no horizontal page overflow. */}
-            <div className="space-y-3 xl:hidden">
-              {data?.recent.map((booking) => (
-                <article key={booking.id} className="min-w-0 rounded-lg border border-[#dae4ed] bg-[#f8fbfe] p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <Link href={bookingHref(booking)} className="min-w-0 break-all font-semibold text-[#0b4d98] hover:underline">
-                      {booking.reference}
-                    </Link>
-                    <Status value={booking.status} />
-                  </div>
-                  <dl className="mt-4 grid min-w-0 grid-cols-1 gap-x-4 gap-y-3 min-[440px]:grid-cols-2">
-                    {!isClient && (
-                      <div className="min-w-0">
-                        <dt className="text-xs text-[#748498]">Client</dt>
-                        <dd className="mt-1 break-words font-medium">{booking.clientName}</dd>
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <dt className="text-xs text-[#748498]">Event type</dt>
-                      <dd className="mt-1 break-words font-medium">{booking.eventType}</dd>
-                    </div>
-                    <div className="min-w-0">
-                      <dt className="text-xs text-[#748498]">Preferred date</dt>
-                      <dd className="mt-1 font-medium">{niceDate(booking.eventDate)}</dd>
-                    </div>
-                  </dl>
-                  <Link href={bookingHref(booking)} className="mt-4 inline-flex min-h-10 items-center text-sm font-semibold text-[#0b4d98] hover:underline">
-                    View booking →
-                  </Link>
-                </article>
-              ))}
-            </div>
-
-            {/* Original table remains available on wider desktop screens. */}
-            <div className="hidden min-w-0 overflow-x-auto xl:block">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Request ID</th>
-                    {!isClient && <th>Client</th>}
-                    <th>Event type</th>
-                    <th>Preferred date</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data?.recent.map((booking) => (
-                    <tr key={booking.id}>
-                      <td>
-                        <Link href={bookingHref(booking)}>{booking.reference}</Link>
-                      </td>
-                      {!isClient && <td className="break-words">{booking.clientName}</td>}
-                      <td className="break-words">{booking.eventType}</td>
-                      <td>{niceDate(booking.eventDate)}</td>
-                      <td><Status value={booking.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {data?.recent.length === 0 && (
-              <Empty title="No bookings yet" description="New event requests will appear here." />
-            )}
-            <p className="hint mt-6">
-              {isClient
-                ? 'Track tentative, held, confirmed and cancelled dates without assuming confirmation.'
-                : isAdmin
-                  ? 'Confirmed booking values are not payments or profit.'
-                  : 'Review inquiries, check dates, coordinate event details, and message clients.'}
-            </p>
-          </Panel>
-
-          <Panel
-            className="min-w-0 overflow-hidden"
-            title={isClient ? 'Quick actions' : isAdmin ? 'Administrator access' : 'Coordinator actions'}
-          >
-            <nav aria-label={`${title} actions`} className="grid min-w-0 grid-cols-1 gap-3 pt-2 sm:grid-cols-2 xl:grid-cols-1">
-              {allowedActions.map((action) => (
-                <Link key={action.href} className="btn min-w-0 w-full text-center break-words" href={action.href}>
-                  {action.text}
-                </Link>
-              ))}
-            </nav>
-          </Panel>
-        </div>
-      )}
-    </main>
-  );
+export default function Dashboard({role,permissions=[]}:{role:Role;permissions?:Permission[]}) {
+  const {data,loading,error,refresh} = useLiveQuery(()=>api<Summary>('/api/summary'),[]);
+  const isClient = role==='CLIENT',isAdmin=role==='ADMIN';
+  const title = isClient?'Your events, thoughtfully organized':isAdmin?'Your operations at a glance':'Your event coordination hub';
+  const caption = isClient?'Follow each request, keep in touch with DM Events and plan what comes next.':isAdmin?'Monitor confirmed commitments, current inquiries and the next operational actions.':'Stay on top of incoming requests, scheduled dates and client communication.';
+  const metrics = isClient ? [
+    {label:'Active requests',value:data?.counts.active??0,detail:'Currently in review',Icon:ClipboardList},
+    {label:'Confirmed bookings',value:data?.counts.confirmed??0,detail:'Secured event dates',Icon:CheckCircle2},
+    {label:'Unread messages',value:data?.counts.unread??0,detail:'Conversation updates',Icon:MessageCircleMore},
+  ] : isAdmin ? [
+    {label:'Booking requests',value:data?.counts.all??0,detail:'All recorded inquiries',Icon:ClipboardList},
+    {label:'Confirmed events',value:data?.counts.confirmed??0,detail:'Approved reservations',Icon:CheckCircle2},
+    {label:'Monthly confirmed value',value:money(data?.counts.monthlyValue),detail:'Not cash received',Icon:BarChart3},
+  ] : [
+    {label:'New inquiries',value:data?.counts.tentative??0,detail:'Waiting for review',Icon:ClipboardList},
+    {label:'Active requests',value:data?.counts.active??0,detail:'Tentative and held',Icon:Clock3},
+    {label:'Confirmed events',value:data?.counts.confirmed??0,detail:'Booked on the calendar',Icon:CalendarDays},
+  ];
+  const actions:QuickAction[] = isClient ? [
+    {label:'Book an event',detail:'Find the right package and date',href:'/client/book',permission:'bookings.create.own',Icon:CalendarPlus2},
+    {label:'My bookings',detail:'Track requests and event details',href:'/client/bookings',permission:'bookings.view.own',Icon:ClipboardList},
+    {label:'Messages',detail:'Talk to the DM Events team',href:'/client/messages',permission:'messages.own',Icon:MessageCircleMore},
+  ] : isAdmin ? [
+    {label:'Booking oversight',detail:'Review event requests',href:'/admin/bookings',permission:'bookings.view.all',Icon:ClipboardList},
+    {label:'Monthly analytics',detail:'View confirmed-value movements',href:'/admin/analytics',permission:'analytics.view',Icon:BarChart3},
+    {label:'Package library',detail:'Manage public packages',href:'/admin/maintenance/packages',permission:'packages.manage',Icon:Package},
+    {label:'Staff and accounts',detail:'Manage authorized users',href:'/admin/maintenance/users',permission:'users.manage',Icon:UsersRound},
+  ] : [
+    {label:'Review requests',detail:'Manage incoming bookings',href:'/coordinator/requests',permission:'bookings.view.all',Icon:ClipboardList},
+    {label:'Event calendar',detail:'Check reserved dates',href:'/coordinator/calendar',permission:'calendar.view',Icon:CalendarDays},
+    {label:'Conversations',detail:'Reply to client questions',href:'/coordinator/messages',permission:'messages.staff',Icon:MessageCircleMore},
+  ];
+  const visibleActions=actions.filter(action=>!action.permission||permissions.includes(action.permission));
+  const href=(booking:Booking)=>isClient?`/client/bookings/${booking.id}`:isAdmin?`/admin/bookings/${booking.id}`:`/coordinator/requests/${booking.id}`;
+  const bookings=data?.recent??[];
+  return <main className="page-wrap page-space workspace">
+    <section className="workspace-hero"><div className="workspace-hero__top"><div><span className="workspace-kicker"><Sparkles size={14}/>{isClient?'YOUR EVENT SPACE':isAdmin?'BUSINESS OVERVIEW':'EVENT OPERATIONS'}</span><h1>{title}</h1><p>{caption}</p></div><div className="workspace-hero__actions">{isClient&&permissions.includes('bookings.create.own')?<Link className="btn" href="/client/book"><CalendarPlus2 size={16}/> Request an event</Link>:<button className="btn btn-outline" onClick={()=>void refresh()} type="button"><ArrowUpRight size={16}/> Refresh overview</button>}</div></div></section>
+    {error&&<p role="alert" className="workspace-banner workspace-banner--error workspace-section">{error}</p>}
+    <div className="workspace-metrics" aria-label="Dashboard summary">{loading&&!data?<div className="col-span-full"><StatSkeleton/></div>:metrics.map(({label,value,detail,Icon})=><article key={label} className="workspace-metric workspace-reveal"><div className="workspace-metric__icon"><Icon size={19}/></div><div className="workspace-metric__label">{label}</div><div className="workspace-metric__value">{value}</div><div className="workspace-metric__hint">{detail}</div></article>)}</div>
+    <div className="workspace-grid workspace-section">
+      <section className="workspace-card"><div className="workspace-section__heading"><div><h2>{isClient?'Your latest requests':isAdmin?'Recent event requests':'Requests needing attention'}</h2><p>Stay informed about booking status and preferred event dates.</p></div>{!loading&&<span className="workspace-pill">{bookings.length} shown</span>}</div>
+        {loading&&!data?<ListSkeleton label="Loading recent events" rows={4}/>:<div className="workspace-stack">{bookings.map(booking=>{
+          const parts=booking.eventDate?.split('-');const month=parts?.length===3?new Date(`${booking.eventDate}T12:00:00`).toLocaleDateString('en-PH',{month:'short'}):'Event';
+          return <Link key={booking.id} href={href(booking)} className="workspace-event"><span className="workspace-event__date"><strong>{parts?.[2]||'—'}</strong><small>{month}</small></span><span className="flex-1"><span className="workspace-event__title">{booking.eventType||'Event booking'}</span><span className="workspace-event__meta">{booking.reference}{!isClient&&<> · {booking.clientName}</>}<br/>{niceDate(booking.eventDate)}</span></span><span className="flex flex-col items-end gap-2"><Status value={booking.status}/><ArrowRight size={16} className="text-[#7b9ab1]"/></span></Link>;
+        })}{!bookings.length&&<div className="workspace-empty"><CalendarDays size={26} className="mx-auto text-[#8eabc0]"/><strong>No booking requests yet</strong>New requests will appear here as they are submitted.</div>}</div>}
+        <p className="workspace-muted mt-5">{isClient?'A request is not confirmed until the team approves your date.':isAdmin?'Confirmed values represent commitments, not revenue or payment.':'Review each new inquiry before holding or confirming its date.'}</p>
+      </section>
+      <aside className="workspace-card"><div className="workspace-section__heading"><div><h2>Quick actions</h2><p>Go directly to the work that matters.</p></div></div><nav aria-label="Dashboard quick actions" className="workspace-stack">{visibleActions.map(({label,detail,href:target,Icon})=><Link key={target} href={target} className="workspace-action"><span className="workspace-action__icon"><Icon size={20}/></span><span className="flex-1"><strong>{label}</strong><small>{detail}</small></span><ArrowRight size={16} className="workspace-action__arrow"/></Link>)}{!visibleActions.length&&<div className="workspace-empty">No additional modules are assigned to this account.</div>}</nav></aside>
+    </div>
+    <div className="workspace-banner workspace-section"><ShieldCheck size={16} className="shrink-0"/><span>Event dates and booking statuses are synchronized with the secure booking records. Changes to your permissions are enforced by the server.</span></div>
+  </main>;
 }

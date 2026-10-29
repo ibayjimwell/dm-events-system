@@ -1,11 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { RefreshCw, Mail, MessageSquareText, RotateCcw, Send, Play } from 'lucide-react';
+import { RefreshCw, Mail, MessageSquareText, RotateCcw, Send, Play, CheckCircle2, AlertTriangle, Inbox, Search } from 'lucide-react';
 import { api, json } from '@/api-client/http';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { ListSkeleton } from '@/components/ui/LoadingSkeleton';
-import { PageTitle } from '@/components/ui/Blocks';
 
 type Item = {
   id: string;
@@ -45,6 +44,15 @@ export default function NotificationsEditor() {
   const [testing, setTesting] = useState(false);
   const [notice, setNotice] = useState('');
   const [noticeError, setNoticeError] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [channelFilter, setChannelFilter] = useState('ALL');
+  const [search, setSearch] = useState('');
+  const items = data?.notifications ?? [];
+  const filteredItems = items.filter(item =>
+    (statusFilter === 'ALL' || item.status === statusFilter) &&
+    (channelFilter === 'ALL' || item.channel === channelFilter) &&
+    `${item.reference} ${item.eventType} ${item.recipient}`.toLowerCase().includes(search.trim().toLowerCase())
+  );
 
   async function retry(id: string) {
     setBusyId(id);
@@ -100,13 +108,15 @@ export default function NotificationsEditor() {
   }
 
   return (
-    <main className="page-wrap page-space min-w-0">
-      <PageTitle
-        title="Booking notifications"
-        subtitle="Test the email connection, deliver pending messages, and monitor transactional email and SMS."
-      />
+    <main className="page-wrap page-space min-w-0 workspace">
+      <section className="workspace-hero"><div className="workspace-hero__top"><div><span className="workspace-kicker"><Mail size={15}/> NOTIFICATION DELIVERY</span><h1>Email & SMS operations</h1><p>Review transactional messages, run an authorized email test, and process or retry queued deliveries.</p></div></div></section>
+      <div className="workspace-metrics">
+        <div className="workspace-metric"><div className="workspace-metric__icon"><Inbox size={19}/></div><div className="workspace-metric__label">Recorded notifications</div><div className="workspace-metric__value">{items.length}</div><div className="workspace-metric__hint">All available delivery records</div></div>
+        <div className="workspace-metric"><div className="workspace-metric__icon"><CheckCircle2 size={19}/></div><div className="workspace-metric__label">Accepted by provider</div><div className="workspace-metric__value">{items.filter(item => item.status === 'ACCEPTED').length}</div><div className="workspace-metric__hint">Provider handoff, not confirmed inbox delivery</div></div>
+        <div className="workspace-metric"><div className="workspace-metric__icon"><AlertTriangle size={19}/></div><div className="workspace-metric__label">Failures & retries</div><div className="workspace-metric__value">{items.filter(item => ['FAILED','RETRY'].includes(item.status)).length}</div><div className="workspace-metric__hint">May require operational attention</div></div>
+      </div>
 
-      <section className="mb-5 rounded-xl border border-[#dae4ed] bg-white p-4 shadow-sm sm:p-5">
+      <section className="workspace-card workspace-section">
         <h2 className="!m-0 !font-sans !text-base !font-semibold !leading-6 text-[#122c44]">
           Delivery tools
         </h2>
@@ -142,9 +152,11 @@ export default function NotificationsEditor() {
       </p>
       {error && <p className="error break-words" role="alert">{error}</p>}
 
-      <section className="grid min-w-0 gap-3">
+      <section className="workspace-section grid min-w-0 gap-3">
+        <div className="workspace-section__heading"><div><h2>Delivery history</h2><p>Filter by delivery state, channel, or recipient.</p></div><span className="workspace-pill">{filteredItems.length} shown</span></div>
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]"><label className="relative"><span className="sr-only">Search notifications</span><Search size={16} className="absolute left-3 top-3.5 text-[#6c8195]"/><input className="workspace-input pl-9" type="search" placeholder="Search reference or recipient" value={search} onChange={event => setSearch(event.target.value)}/></label><label><span className="sr-only">Filter status</span><select className="workspace-input" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="ALL">All statuses</option>{['PENDING','PROCESSING','ACCEPTED','RETRY','FAILED'].map(value => <option value={value} key={value}>{value}</option>)}</select></label><label><span className="sr-only">Filter channel</span><select className="workspace-input" value={channelFilter} onChange={event => setChannelFilter(event.target.value)}><option value="ALL">All channels</option><option value="EMAIL">Email</option><option value="SMS">SMS</option></select></label></div>
         {loading && !data && <ListSkeleton label="Loading notifications" rows={5} />}
-        {data?.notifications.map((item) => (
+        {filteredItems.map((item) => (
           <article key={item.id} className="min-w-0 rounded-xl border border-[#dae4ed] bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex min-w-0 items-start gap-3">
@@ -183,9 +195,9 @@ export default function NotificationsEditor() {
             )}
           </article>
         ))}
-        {!loading && !data?.notifications.length && (
+        {!loading && !filteredItems.length && (
           <div className="rounded-xl border border-[#dae4ed] bg-white p-8 text-center text-sm text-[#748498]">
-            No booking notifications recorded yet. Create a booking or change its status to generate an outbox event.
+            {items.length ? 'No notifications match your filters. Try another status, channel, or search term.' : 'No booking notifications recorded yet. Create a booking or change its status to generate an outbox event.'}
           </div>
         )}
       </section>

@@ -58,5 +58,5 @@ test('admin layout imports its messenger frame and chat links cannot automatical
   assert.match(layout, /import PortalMessengerFrame from/);
   assert.match(layout, /<PortalMessengerFrame/);
   const nav = read('src/components/shared/SiteNav.tsx');
-  assert.match(nav, /prefetch=\{item\.href\.endsWith\('\/messages'\) \? false/);
+  assert.match(nav, /prefetch=\{false\}/);
 });

@@ -1,5 +1,5 @@
 /** A single shared authenticated SSE stream per browser tab. */
-type Listener = () => void;
+type Listener = (kind?: string) => void;
 export type ChatEvent = {
   kind: 'message' | 'read' | 'typing' | 'disconnected';
   bookingId?: string;
@@ -14,7 +14,15 @@ let source: EventSource | null = null;
 function ensureSource() {
   if (typeof window === 'undefined' || source) return;
   source = new EventSource('/api/events');
-  source.addEventListener('change', () => listeners.forEach(fn => fn()));
+  source.addEventListener('change', event => {
+    // Use only the source table identifier, never any private row content.
+    let kind: string | undefined;
+    try {
+      const payload = JSON.parse((event as MessageEvent).data) as { kind?: unknown };
+      if (typeof payload.kind === 'string') kind = payload.kind;
+    } catch { /* Older deployments may emit no structured payload. */ }
+    listeners.forEach(fn => fn(kind));
+  });
   source.addEventListener('chat', event => {
     try {
       const payload = JSON.parse((event as MessageEvent).data) as ChatEvent;
