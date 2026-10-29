@@ -1,69 +1,40 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
-import { CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, MessageCircle, ShieldCheck } from 'lucide-react';
 import { api, json } from '@/api-client/http';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { DetailSkeleton } from '@/components/ui/LoadingSkeleton';
-import { Panel, PageTitle, Status, Field, niceDate, money } from '@/components/ui/Blocks';
+import { money, niceDate } from '@/components/ui/Blocks';
 import BookingChangeDialog, { type BookingChange } from '@/components/ui/BookingChangeDialog';
+import { BookingSavedDialog } from '@/components/ui/BookingFeedback';
 import EventScheduleEditor from '@/components/coordinator/EventScheduleEditor';
+import { BookingHero, BookingStatus, BookingPanel, BookingInfoGrid, BookingTimeline, bookingStyles as s } from '@/components/ui/BookingSurface';
 
 type Detail = {
-  id: string;
-  reference: string;
-  eventType: string;
-  eventDate: string;
-  venue: string;
-  guestCount: number;
-  estimatedBudget: string;
-  preferredTheme: string;
-  colorPalette: string;
-  specialRequests: string;
-  inspirationAssetId: string | null;
-  status: 'TENTATIVE' | 'HELD' | 'CONFIRMED' | 'CANCELLED';
-  bookedValue: string | null;
-  updatedAt: string;
-  eventStartTime: string | null;
-  eventEndTime: string | null;
-  assignedCoordinatorId: string | null;
-  scheduleNotes: string;
-  reviewNote: string | null;
-  cancellationRequestedAt: string | null;
-  cancellationReason: string | null;
+  id: string; reference: string; eventType: string; eventDate: string; venue: string; guestCount: number;
+  estimatedBudget: string; preferredTheme: string; colorPalette: string; specialRequests: string;
+  inspirationAssetId: string | null; status: 'TENTATIVE' | 'HELD' | 'CONFIRMED' | 'CANCELLED';
+  bookedValue: string | null; updatedAt: string;
+  eventStartTime: string | null; eventEndTime: string | null;
+  assignedCoordinatorId: string | null; scheduleNotes: string;
+  reviewNote: string | null; cancellationRequestedAt: string | null; cancellationReason: string | null;
   client: { fullName: string; email: string; phone: string | null };
   package: { name: string } | null;
-  history: {
-    id: string;
-    toStatus: string;
-    note: string | null;
-    actorName: string;
-    createdAt: string;
-  }[];
+  history: { id: string; toStatus: string; note: string | null; actorName: string; createdAt: string }[];
 };
 
-export default function ReviewRequest({
-  id,
-  role,
-  canUpdateStatus = true,
-  canMessage = true,
-  canViewList = true,
-}: {
-  id: string;
-  role: 'COORDINATOR' | 'ADMIN';
-  canUpdateStatus?: boolean;
-  canMessage?: boolean;
-  canViewList?: boolean;
+export default function ReviewRequest({ id, role, canUpdateStatus = true, canMessage = true, canViewList = true }: {
+  id: string; role: 'COORDINATOR' | 'ADMIN'; canUpdateStatus?: boolean; canMessage?: boolean; canViewList?: boolean;
 }) {
   const router = useRouter();
+  const listHref = role === 'ADMIN' ? '/admin/bookings' : '/coordinator/requests';
   const [savedOpen, setSavedOpen] = useState(false);
+  const [savedChanges, setSavedChanges] = useState<BookingChange[]>([]);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
-  const { data, loading, error, refresh } = useLiveQuery(
-    () => api<{ booking: Detail }>(`/api/bookings/${id}`),
-    [id],
-  );
+  const { data, loading, error, refresh } = useLiveQuery(() => api<{ booking: Detail }>(`/api/bookings/${id}`), [id]);
   const booking = data?.booking;
   const [status, setStatus] = useState<Detail['status']>('TENTATIVE');
   const [value, setValue] = useState('');
@@ -76,273 +47,113 @@ export default function ReviewRequest({
 
   useEffect(() => {
     if (booking && !formTouched) {
-      setStatus(booking.status);
-      setValue(booking.bookedValue || '');
-      setNote(booking.reviewNote || '');
-      setEditingVersion(booking.updatedAt);
+      setStatus(booking.status); setValue(booking.bookedValue || '');
+      setNote(booking.reviewNote || ''); setEditingVersion(booking.updatedAt);
     }
-  }, [booking?.id, booking?.status, booking?.bookedValue, booking?.reviewNote, formTouched]);
+  }, [booking?.id, booking?.status, booking?.bookedValue, booking?.reviewNote, booking?.updatedAt, formTouched]);
 
   const normalizedAmount = value.trim() === '' ? null : Number(value);
   const changes: BookingChange[] = booking ? [
     ...(status !== booking.status ? [{ label: 'Booking status', before: booking.status, after: status }] : []),
-    ...(Number(booking.bookedValue ?? 0) !== Number(normalizedAmount ?? 0) ||
-      (booking.bookedValue === null) !== (normalizedAmount === null)
+    ...(Number(booking.bookedValue ?? 0) !== Number(normalizedAmount ?? 0) || (booking.bookedValue === null) !== (normalizedAmount === null)
       ? [{ label: 'Agreed booking value', before: booking.bookedValue === null ? 'Not set' : money(booking.bookedValue), after: normalizedAmount === null ? 'Not set' : money(normalizedAmount) }] : []),
     ...(note.trim() !== (booking.reviewNote || '').trim() ? [{ label: 'Coordinator notes / client update', before: booking.reviewNote || 'Not set', after: note.trim() || 'Not set' }] : []),
   ] : [];
 
   function previewSave(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setResult('');
+    event.preventDefault(); setResult('');
     if (!booking || busy) return;
-    if (normalizedAmount !== null && (!Number.isFinite(normalizedAmount) || normalizedAmount < 0)) {
-      setResult('Enter a valid nonnegative booking value.'); return;
-    }
-    if (status === 'CONFIRMED' && (!normalizedAmount || normalizedAmount <= 0)) {
-      setResult('A positive agreed booking value is required to confirm an event.'); return;
-    }
+    if (normalizedAmount !== null && (!Number.isFinite(normalizedAmount) || normalizedAmount < 0)) { setResult('Enter a valid nonnegative booking value.'); return; }
+    if (status === 'CONFIRMED' && (!normalizedAmount || normalizedAmount <= 0)) { setResult('A positive agreed booking value is required to confirm an event.'); return; }
     if (!changes.length) { setResult('No changes to save.'); return; }
     setConfirmationOpen(true);
   }
 
   async function save() {
     if (busy || !confirmationOpen || !booking) return;
-    setBusy(true);
-    setResult('');
+    setBusy(true); setResult('');
+    const changesToSave = changes.map(change => ({ ...change }));
     try {
-      await api(
-        `/api/bookings/${id}/status`,
-        json('POST', {
-          status,
-          bookedValue: normalizedAmount,
-          note: note.trim(),
-          overrideConflict: false,
-          expectedUpdatedAt: editingVersion || booking.updatedAt,
-        }),
-      );
-      setConfirmationOpen(false);
-      setFormTouched(false);
-      setEditingVersion('');
-      setSavedOpen(true);
-      await refresh();
+      await api(`/api/bookings/${id}/status`, json('POST', {
+        status, bookedValue: normalizedAmount, note: note.trim(), overrideConflict: false,
+        expectedUpdatedAt: editingVersion || booking.updatedAt,
+      }));
+      setConfirmationOpen(false); setFormTouched(false); setEditingVersion('');
+      setSavedChanges(changesToSave); setSavedOpen(true); await refresh();
     } catch (caught) {
       setResult(caught instanceof Error ? caught.message : 'Unable to save status.');
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   }
 
-  const details: { label: string; value: string }[] = booking
-    ? [
-        { label: 'Client', value: booking.client.fullName },
-        { label: 'Email', value: booking.client.email },
-        { label: 'Contact', value: booking.client.phone || '—' },
-        { label: 'Preferred date', value: niceDate(booking.eventDate) },
-        { label: 'Event time', value: booking.eventStartTime && booking.eventEndTime ? `${booking.eventStartTime}–${booking.eventEndTime}` : 'Not scheduled yet' },
-        { label: 'Venue', value: booking.venue },
-        { label: 'Guest count', value: String(booking.guestCount) },
-        { label: 'Budget', value: booking.estimatedBudget },
-        { label: 'Preferred package', value: booking.package?.name || 'Not decided' },
-        {
-          label: 'Theme / colors',
-          value: [booking.preferredTheme, booking.colorPalette].filter(Boolean).join(' • ') || '—',
-        },
-        { label: 'Additional requests', value: booking.specialRequests || '—' },
-      ]
-    : [];
-
-  return (
-    <main className="page-wrap page-space min-w-0">
-      <PageTitle
-        title="Review event request"
-        subtitle={booking ? `${booking.reference} • ${booking.eventType}` : 'Loading event details'}
-      />
-      {error && <p className="error break-words">{error}</p>}
-      {loading && !booking ? (
-        <DetailSkeleton />
-      ) : (
-        booking && (
-          <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.8fr)_minmax(290px,1fr)] xl:gap-6">
-            <Panel
-              title={`${booking.reference} • ${booking.eventType}`}
-              className="min-w-0 overflow-hidden [&_h3]:break-words"
-            >
-              {/* Mobile/tablet: two-line details that fit even at 320 px. */}
-              <dl className="divide-y divide-[#dae4ed] md:hidden">
-                {details.map((item) => (
-                  <div key={item.label} className="min-w-0 py-3 first:pt-0">
-                    <dt className="text-xs font-semibold uppercase tracking-wide text-[#748498]">
-                      {item.label}
-                    </dt>
-                    <dd className="mt-1 min-w-0 break-words text-sm leading-relaxed text-[#122c44] [overflow-wrap:anywhere]">
-                      {item.value}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-
-              {/* Keep the original table layout for desktop. */}
-              <div className="hidden min-w-0 overflow-x-auto md:block">
-                <table className="data-table">
-                  <tbody>
-                    {details.map((item) => (
-                      <tr key={item.label}>
-                        <th className="w-[35%] align-top">{item.label}</th>
-                        <td className="break-words [overflow-wrap:anywhere]">{item.value}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {booking.cancellationRequestedAt && (
-                <p className="notice notice-warn mt-5 break-words [overflow-wrap:anywhere]">
-                  Client requested cancellation: {booking.cancellationReason}. Review before marking cancelled.
-                </p>
-              )}
-
-              <h3 className="mb-4 mt-7 text-xl">History</h3>
-              <div className="divide-y divide-[#dae4ed]">
-                {booking.history.map((entry) => (
-                  <article key={entry.id} className="min-w-0 py-3">
-                    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-                      <Status value={entry.toStatus} />
-                      <span className="hint min-w-0 break-words [overflow-wrap:anywhere]">
-                        {niceDate(entry.createdAt)} • {entry.actorName}
-                      </span>
-                    </div>
-                    <p className="mt-2 break-words text-sm leading-relaxed [overflow-wrap:anywhere]">
-                      {entry.note || 'Status updated'}
-                    </p>
-                  </article>
-                ))}
-              </div>
-            </Panel>
-
-            <Panel title="Review & coordinate" className="min-w-0 overflow-hidden">
-              <p className="mb-3 break-words font-semibold">
-                Inspiration photo {booking.inspirationAssetId ? 'attached' : 'not attached'}
-              </p>
-              {booking.inspirationAssetId ? (
-                <a
-                  href={`/api/assets/${booking.inspirationAssetId}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block min-w-0"
-                >
-                  {/* Image is served by the application's authenticated asset endpoint. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`/api/assets/${booking.inspirationAssetId}`}
-                    alt="Client inspiration"
-                    className="max-h-[260px] w-full max-w-full rounded-lg bg-[#f1f6fa] object-contain"
-                  />
-                  <span className="linklike mt-2 inline-block">View submitted image ↗</span>
-                </a>
-              ) : (
-                <p className="hint">Client did not upload a photo.</p>
-              )}
-
-              {canUpdateStatus ? <form onSubmit={previewSave} className="mt-7 grid min-w-0 gap-5">
-                <div className="min-w-0 [&_.field]:min-w-0">
-                  <Field label="Booking status">
-                    <select
-                      className="w-full min-w-0 max-w-full"
-                      value={status}
-                      onChange={(event) => { setStatus(event.target.value as Detail['status']); markEdited(); }}
-                    >
-                      <option value="TENTATIVE" disabled={booking.status === 'CONFIRMED' || booking.status === 'CANCELLED'}>Tentative</option>
-                      <option value="HELD" disabled={booking.status === 'CONFIRMED' || booking.status === 'CANCELLED'}>Held</option>
-                      <option value="CONFIRMED" disabled={booking.status === 'CANCELLED'}>Confirmed</option>
-                      <option value="CANCELLED">Cancelled</option>
-                    </select>
-                  </Field>
-                </div>
-
-                <div className="min-w-0">
-                  <Field label="Agreed booking value (PHP)">
-                    <input
-                      className="w-full min-w-0 max-w-full"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={value}
-                      onChange={(event) => { setValue(event.target.value); markEdited(); }}
-                      placeholder="Required to confirm"
-                    />
-                  </Field>
-                </div>
-
-                <div className="min-w-0">
-                  <Field label="Coordinator notes / client update">
-                    <textarea
-                      className="w-full min-w-0 max-w-full"
-                      value={note}
-                      onChange={(event) => { setNote(event.target.value); markEdited(); }}
-                      placeholder="Status update and next steps"
-                    />
-                  </Field>
-                </div>
-
-                <p className="rounded-lg bg-[#f1f6fa] p-3 text-xs leading-relaxed text-[#748498]">
-                  Held and Confirmed events exclusively reserve their date. Double-booking is blocked even for administrators.
-                </p>
-
-                <button type="submit" className="btn w-full" disabled={busy}>
-                  {busy ? 'Saving…' : 'Save Status'}
-                </button>
-                {result && <p className="notice break-words [overflow-wrap:anywhere]" role="status">{result}</p>}
-              </form> : <p className="notice mt-5">This account has review access but not permission to change booking status.</p>}
-
-              <EventScheduleEditor booking={booking} canEdit={canUpdateStatus} onSaved={refresh} />
-
-              {canMessage && <Link
-                href={role === 'ADMIN' ? `/admin/messages?booking=${id}` : `/coordinator/messages?booking=${id}`}
-                className="btn btn-ghost mt-4 w-full text-center"
-              >
-                Message client
-              </Link>}
-              <Link
-                href={role === 'ADMIN' ? '/admin/bookings' : '/coordinator/calendar'}
-                className="mt-4 block break-words font-semibold text-[#0b4d98] hover:underline"
-              >
-                {role === 'ADMIN' ? 'Back to all bookings →' : 'Check calendar & date availability →'}
-              </Link>
-              <p className="hint mt-5">
-                No staff duty or task assignment. Dates are reviewed by DM Events.
-              </p>
-            </Panel>
-          </div>
-        )
-      )}
-      <BookingChangeDialog
-        open={confirmationOpen}
-        reference={booking?.reference ?? ''}
-        changes={changes}
-        error={result}
-        busy={busy}
-        onCancel={() => setConfirmationOpen(false)}
-        onConfirm={() => void save()}
-      />
-      {savedOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#071f3b]/65 p-4" role="presentation">
-          <section role="alertdialog" aria-modal="true" aria-labelledby="saved-title" aria-describedby="saved-description"
-            className="w-full max-w-sm rounded-2xl border border-[#dae4ed] bg-white px-6 py-8 text-center shadow-2xl motion-safe:animate-[pulse_400ms_ease-out_1]">
-            <div className="mx-auto mb-5 flex size-20 items-center justify-center rounded-full bg-emerald-50">
-              <CheckCircle2 className="size-12 text-emerald-600 motion-safe:animate-[bounce_650ms_ease-out_1]" strokeWidth={1.8} aria-hidden="true" />
-            </div>
-            <h2 id="saved-title" className="text-2xl font-semibold text-[#122c44]">Changes saved!</h2>
-            <p id="saved-description" className="mt-3 text-sm leading-6 text-[#748498]">
-              Booking status and update history were saved successfully. The client can view the latest information.
-            </p>
-            <button type="button" autoFocus className="btn mt-7 w-full" onClick={() => {
-              setSavedOpen(false);
-              if (canViewList) router.push(role === 'ADMIN' ? '/admin/bookings' : '/coordinator/requests');
-            }}>OK</button>
-          </section>
-        </div>
-      )}
-    </main>
-  );
+  return <main className={s.page}><div className={s.shell}>
+    <BookingHero eyebrow="DM Events · Booking operations" backHref={canViewList ? listHref : undefined}
+      backLabel={role === 'ADMIN' ? 'All bookings' : 'Event requests'}
+      title={booking?.eventType || 'Review event request'}
+      description={booking ? `${booking.reference} · Review details, coordinate schedules, and update booking decisions.` : 'Loading booking details…'}
+      actions={booking && <BookingStatus value={booking.status}/>}
+    >{booking && <div className={s.detailHeroGrid}>
+      <div className={s.heroFact}><small>Preferred date</small><strong>{niceDate(booking.eventDate)}</strong></div>
+      <div className={s.heroFact}><small>Client</small><strong>{booking.client.fullName}</strong></div>
+      <div className={s.heroFact}><small>Agreed booking value</small><strong>{booking.bookedValue ? money(booking.bookedValue) : 'Not set'}</strong></div>
+    </div>}</BookingHero>
+    {error && <div role="alert" className={`${s.alert} ${s.alertDanger} mt-5`}>{error}<button type="button" className="underline" onClick={() => void refresh()}>Retry</button></div>}
+    {loading && !booking ? <div className="mt-5"><DetailSkeleton/></div> : booking && <div className={s.detailLayout}>
+      <div className={s.stack}>
+        <BookingPanel title="Event information" description="Review the inquiry before making a decision.">
+          <BookingInfoGrid items={[
+            { label: 'Event type', value: booking.eventType },
+            { label: 'Preferred date', value: niceDate(booking.eventDate) },
+            { label: 'Event time', value: booking.eventStartTime && booking.eventEndTime ? `${booking.eventStartTime} – ${booking.eventEndTime}` : 'Not scheduled' },
+            { label: 'Venue', value: booking.venue },
+            { label: 'Expected guests', value: booking.guestCount },
+            { label: 'Estimated budget', value: booking.estimatedBudget },
+            { label: 'Preferred package', value: booking.package?.name },
+            { label: 'Theme', value: booking.preferredTheme },
+            { label: 'Color palette', value: booking.colorPalette },
+            { label: 'Special requests', value: booking.specialRequests },
+          ]}/>
+        </BookingPanel>
+        <BookingPanel title="Client contact" description="Details to use when following up on this request.">
+          <BookingInfoGrid items={[
+            { label: 'Full name', value: booking.client.fullName },
+            { label: 'Email address', value: booking.client.email },
+            { label: 'Contact number', value: booking.client.phone },
+          ]}/>
+          {canMessage && <Link href={role === 'ADMIN' ? `/admin/messages?booking=${id}` : `/coordinator/messages?booking=${id}`} className={`${s.actionLink} mt-5`}><MessageCircle size={16}/> Message client <ArrowRight size={16}/></Link>}
+        </BookingPanel>
+        {booking.inspirationAssetId && <BookingPanel title="Client inspiration" description="Visual inspiration submitted with the booking.">
+          <a href={`/api/assets/${booking.inspirationAssetId}`} target="_blank" rel="noreferrer" className={s.photoFrame}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className={s.photo} src={`/api/assets/${booking.inspirationAssetId}`} alt="Client inspiration" loading="lazy"/>
+          </a><p className={`${s.helper} mt-3`}>Select the image to open it in full size.</p>
+        </BookingPanel>}
+        <BookingPanel title="Booking activity" description="Recorded status decisions and staff notes."><BookingTimeline history={booking.history}/></BookingPanel>
+      </div>
+      <aside className={s.stack}>
+        {booking.cancellationRequestedAt && <div className={`${s.alert} ${s.alertWarn}`} role="status"><AlertTriangle size={18} className="mt-0.5 shrink-0"/><span><strong>Cancellation requested</strong><br/>{booking.cancellationReason || 'The client requested cancellation.'} Review this request before updating the booking status.</span></div>}
+        <BookingPanel title="Booking decision" description="Update status, agreed value and client-visible notes.">
+          <div className={`${s.alert} mb-5`}><ShieldCheck size={18} className="mt-0.5 shrink-0"/><span>Held and Confirmed bookings exclusively reserve their date. Server-side double-booking protection remains active.</span></div>
+          {canUpdateStatus ? <form onSubmit={previewSave} className={s.form}>
+            <div><label htmlFor="booking-review-status">Booking status</label><select id="booking-review-status" className={s.input} value={status} onChange={e => { setStatus(e.target.value as Detail['status']); markEdited(); }}>
+              <option value="TENTATIVE" disabled={booking.status === 'CONFIRMED' || booking.status === 'CANCELLED'}>Tentative · Awaiting review</option>
+              <option value="HELD" disabled={booking.status === 'CONFIRMED' || booking.status === 'CANCELLED'}>Held · Reserve date</option>
+              <option value="CONFIRMED" disabled={booking.status === 'CANCELLED'}>Confirmed · Event secured</option>
+              <option value="CANCELLED">Cancelled · Release date</option>
+            </select></div>
+            <div><label htmlFor="booking-review-value">Agreed value (PHP)</label><input id="booking-review-value" className={s.input} type="number" min="0" step="0.01" value={value} onChange={e => { setValue(e.target.value); markEdited(); }} placeholder="Required for confirmation"/></div>
+            <div><label htmlFor="booking-review-note">Notes / client update</label><textarea id="booking-review-note" className={s.input} rows={4} value={note} onChange={e => { setNote(e.target.value); markEdited(); }} placeholder="Record a decision, instructions or next steps"/></div>
+            <p className={s.helper}>The new status and agreed value are recorded only after you review and confirm your changes.</p>
+            <button className={`${s.actionLink} w-full`} type="submit" disabled={busy || changes.length === 0}><CheckCircle2 size={16}/>{busy ? 'Saving changes…' : `Review ${changes.length} ${changes.length === 1 ? 'change' : 'changes'}`}</button>
+            {result && <div role="alert" className={`${s.alert} ${s.alertDanger}`}>{result}</div>}
+          </form> : <div className={s.alert}>You can review this request, but your account cannot change its booking status.</div>}
+        </BookingPanel>
+        <BookingPanel title="Event scheduling" description="Organize the event timeline, assigned Coordinator and private notes.">
+          <EventScheduleEditor booking={booking} canEdit={canUpdateStatus} onSaved={refresh}/>
+        </BookingPanel>
+        {canViewList && <Link className={`${s.actionLink} ${s.actionLinkSecondary}`} href={listHref}><ArrowLeft size={16}/> Back to booking requests</Link>}
+      </aside>
+    </div>}
+    <BookingChangeDialog open={confirmationOpen} reference={booking?.reference ?? ''} changes={changes} busy={busy} error={result} onCancel={() => setConfirmationOpen(false)} onConfirm={() => void save()}/>
+    <BookingSavedDialog open={savedOpen} reference={booking?.reference ?? ''} changes={savedChanges} canReturnToList={canViewList} onContinue={() => { setSavedOpen(false); if (canViewList) router.push(listHref); }}/>
+  </div></main>;
 }

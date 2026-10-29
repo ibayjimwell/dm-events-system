@@ -146,7 +146,8 @@ export const bookingInput = z.object({
   eventType: z.string().trim().min(2).max(120),
   eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   guestCount: z.coerce.number().int().min(1).max(100000),
-  venue: z.string().trim().min(2).max(2000),
+  // Venue may be unknown when requesting a quotation; never require a location upfront.
+  venue: z.string().trim().max(2000).default(''),
   estimatedBudget: z.string().trim().min(1).max(200),
   packageId: z.string().uuid().nullable().optional(),
   preferredTheme: z.string().max(400).default(''),

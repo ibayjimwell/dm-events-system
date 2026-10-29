@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { loginForBooking } from '@/lib/bookingNavigation';
 import { ArrowDown, ArrowRight, ArrowUpRight, CalendarDays, CheckCircle2, MessageCircle, Sparkles } from 'lucide-react';
 import PackageShowcaseCard, { type PublicPackage } from './PackageShowcaseCard';
 import { normalizeHomepage } from '@/lib/sitePresentation';
@@ -29,7 +30,7 @@ export default function HomeShowcase({ site, featured, preview = false }: {
         <p className="dm-hero__subtitle">{site.heroSubtitle}</p>
         <div className="dm-hero__actions">
           <Link className="dm-button dm-button--gold" href="/packages">Explore our packages <ArrowUpRight size={18} aria-hidden="true" /></Link>
-          <Link className="dm-button dm-button--outline" href="/client/book">Plan your event <ArrowRight size={18} aria-hidden="true" /></Link>
+          <Link className="dm-button dm-button--outline" href={loginForBooking()}>Plan your event <ArrowRight size={18} aria-hidden="true" /></Link>
         </div>
       </div>
       <div className="dm-hero__bottom dm-marketing__container"><span>DM EVENTS · EVENT BOOKING & COORDINATION</span><a href="#discover" aria-label="Scroll to discover DM Events">DISCOVER <ArrowDown size={16} /></a></div>
@@ -47,11 +48,11 @@ export default function HomeShowcase({ site, featured, preview = false }: {
 
     <section className="dm-featured dm-marketing__container" aria-labelledby="dm-featured-title">
       <div className="dm-featured__head"><div className="dm-section-heading"><p className="dm-eyebrow"><span className="dm-line" />{h.packagesEyebrow}</p><h2 id="dm-featured-title">{h.packagesTitle}</h2><p>{h.packagesBody}</p></div><Link className="dm-text-link" href="/packages">View all packages <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
-      {featured.length ? <div className="dm-showcase-grid">{featured.slice(0,3).map((item,i)=><PackageShowcaseCard key={item.id} item={item} index={i} />)}</div> : <div className="dm-empty-packages"><Sparkles size={28} aria-hidden="true" /><h3>Something wonderful is taking shape.</h3><p>Our packages are being prepared. You can still share your event idea with us.</p><Link className="dm-button dm-button--dark" href="/client/book">Start an inquiry <ArrowRight size={16} /></Link></div>}
+      {featured.length ? <div className="dm-showcase-grid">{featured.slice(0,3).map((item,i)=><PackageShowcaseCard key={item.id} item={item} index={i} />)}</div> : <div className="dm-empty-packages"><Sparkles size={28} aria-hidden="true" /><h3>Something wonderful is taking shape.</h3><p>Our packages are being prepared. You can still share your event idea with us.</p><Link className="dm-button dm-button--dark" href={loginForBooking()}>Start an inquiry <ArrowRight size={16} /></Link></div>}
     </section>
 
     <section className="dm-journey" aria-labelledby="dm-journey-title"><div className="dm-marketing__container dm-journey__layout"><div><p className="dm-eyebrow dm-eyebrow--light"><span className="dm-line" />{h.stepsEyebrow}</p><h2 id="dm-journey-title">{h.stepsTitle}</h2><p className="dm-journey__note">Your event journey, organized from the beginning.</p></div><div className="dm-journey__steps">{h.steps.map((step,i)=><div className="dm-journey__step" key={i}><span className="dm-journey__index">0{i+1}</span><div><h3>{step.title}</h3><p>{step.description}</p></div><CheckCircle2 size={19} aria-hidden="true" /></div>)}</div></div></section>
 
-    <section className="dm-final-cta dm-marketing__container" aria-labelledby="dm-cta-title"><div className="dm-final-cta__inner"><div><p className="dm-eyebrow"><span className="dm-line" />{h.ctaEyebrow}</p><h2 id="dm-cta-title">{h.ctaTitle}</h2><p>{h.ctaBody}</p></div><Link className="dm-button dm-button--dark" href="/client/book">Request an event <ArrowUpRight size={18} aria-hidden="true" /></Link></div></section>
+    <section className="dm-final-cta dm-marketing__container" aria-labelledby="dm-cta-title"><div className="dm-final-cta__inner"><div><p className="dm-eyebrow"><span className="dm-line" />{h.ctaEyebrow}</p><h2 id="dm-cta-title">{h.ctaTitle}</h2><p>{h.ctaBody}</p></div><Link className="dm-button dm-button--dark" href={loginForBooking()}>Request an event <ArrowUpRight size={18} aria-hidden="true" /></Link></div></section>
   </main>;
 }

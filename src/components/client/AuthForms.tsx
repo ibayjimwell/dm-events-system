@@ -15,12 +15,14 @@ import {
   type PhoneCountry,
 } from '@/lib/validators';
 import styles from './AuthForms.module.css';
+import { safeBookingDestination } from '@/lib/bookingNavigation';
 
 type Mode = 'login' | 'register' | 'forgot' | 'reset' | 'verify';
 type RegistrationField = 'fullName' | 'email' | 'localPhone' | 'password' | 'consent';
 type RegistrationErrors = Partial<Record<RegistrationField, string>>;
 
 const DRAFT_KEY = 'dm-events-registration-draft-v1';
+const BOOKING_INTENT_KEY = 'dm-events-pending-booking-v1';
 const TITLES: Record<Mode, string> = {
   login: 'WELCOME BACK',
   register: 'CREATE AN ACCOUNT',
@@ -32,6 +34,8 @@ const TITLES: Record<Mode, string> = {
 export default function AuthForms({ mode }: { mode: Mode }) {
   const router = useRouter();
   const query = useSearchParams();
+  const next = safeBookingDestination(query.get('next'));
+  const [pendingBooking, setPendingBooking] = useState<string | null>(next);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -46,6 +50,22 @@ export default function AuthForms({ mode }: { mode: Mode }) {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // Carry package intent across Login → Register → Login, including email verification.
+  // Store only a validated internal booking URL, never an arbitrary redirect.
+  useEffect(() => {
+    if (mode !== 'login' && mode !== 'register') return;
+    try {
+      if (next) {
+        sessionStorage.setItem(BOOKING_INTENT_KEY, next);
+        setPendingBooking(next);
+      } else {
+        setPendingBooking(safeBookingDestination(sessionStorage.getItem(BOOKING_INTENT_KEY)));
+      }
+    } catch {
+      setPendingBooking(next);
+    }
+  }, [mode, next]);
 
   // Restore the non-sensitive fields when the client returns to registration.
   useEffect(() => {
@@ -177,13 +197,15 @@ export default function AuthForms({ mode }: { mode: Mode }) {
           '/api/auth/login',
           json('POST', { email, password })
         );
-        router.replace(
-          result.user.role === 'ADMIN'
-            ? '/admin'
-            : result.user.role === 'COORDINATOR'
-              ? '/coordinator'
-              : '/client'
-        );
+        const destination = result.user.role === 'ADMIN'
+          ? '/admin'
+          : result.user.role === 'COORDINATOR'
+            ? '/coordinator'
+            : (next ?? pendingBooking ?? '/client');
+        // Consume the pending intent on any successful login, including staff login,
+        // so it cannot unexpectedly affect a different session later.
+        try { sessionStorage.removeItem(BOOKING_INTENT_KEY); } catch { /* Storage optional. */ }
+        router.replace(destination);
         router.refresh();
       } else if (mode === 'register') {
         const result = await api<{ verificationRequired: boolean }>(
@@ -203,7 +225,8 @@ export default function AuthForms({ mode }: { mode: Mode }) {
         if (result.verificationRequired) {
           setMessage('Please check your email for your verification link.');
         } else {
-          router.replace('/client');
+          try { sessionStorage.removeItem(BOOKING_INTENT_KEY); } catch { /* Storage optional. */ }
+          router.replace(next ?? pendingBooking ?? '/client');
           router.refresh();
         }
       } else if (mode === 'forgot') {
@@ -453,13 +476,13 @@ export default function AuthForms({ mode }: { mode: Mode }) {
         <div className="auth-links">
           {mode === 'login' ? (
             <>
-              <span>New client? <Link href="/register">Create account</Link></span>
+              <span>New client? <Link href={pendingBooking ? `/register?next=${encodeURIComponent(pendingBooking)}` : '/register'}>Create account</Link></span>
               <span>|</span>
               <Link href="/forgot-password">Forgot password?</Link>
             </>
           ) : (
             <>
-              <Link href="/login">Back to log in</Link>
+              <Link href={pendingBooking ? `/login?next=${encodeURIComponent(pendingBooking)}` : '/login'}>Back to log in</Link>
               {mode === 'register' && <Link href="/privacy">Privacy Policy</Link>}
             </>
           )}

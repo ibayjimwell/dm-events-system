@@ -53,7 +53,7 @@ test('website content remains draft/publish gated and never exposes drafts to pu
   assert.match(route, /homepage:\s*homepageSchema\.parse/);
 });
 
-test('public lists contain published packages and retain original inquiry links', () => {
+test('public lists contain published packages and keep package intent through login', () => {
   const page = read('app/(public)/page.tsx');
   const listing = read('app/(public)/packages/page.tsx');
   const details = read('app/(public)/packages/[id]/page.tsx');
@@ -61,7 +61,8 @@ test('public lists contain published packages and retain original inquiry links'
   assert.match(page, /eq\(packages\.published, true\)/);
   assert.match(listing, /eq\(packages\.published, true\)/);
   assert.match(details, /eq\(packages\.published, true\)/);
-  assert.match(details, /\/client\/book\?package=/);
+  assert.match(details, /bookingDestination\(pkg\.id\)/);
+  assert.match(details, /loginForBooking\(pkg\.id\)/);
   assert.match(card, /\/packages\/\$\{item\.id\}/);
   assert.match(page, /if \(user\?\.role === 'ADMIN'\) redirect\('\/admin'\)/);
   assert.match(page, /if \(user\?\.role === 'COORDINATOR'\) redirect\('\/coordinator'\)/);

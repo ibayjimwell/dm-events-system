@@ -1,5 +1,7 @@
 'use client';
 import { InlineSkeleton } from '@/components/ui/LoadingSkeleton';
+import { BookingSuccessCard } from '@/components/ui/BookingFeedback';
+import { bookingStyles as bookingStyles } from '@/components/ui/BookingSurface';
 
 import { uploadImage } from '@/api-client/uploadImage';
 import AvailableDatePicker from '@/components/ui/AvailableDatePicker';
@@ -49,7 +51,9 @@ export default function WalkInBooking({role}:{role:'ADMIN'|'COORDINATOR'}){
   }catch(e){setError(e instanceof Error?e.message:'Could not create a booking');}finally{setBusy(false);}
  }
  const textInput=(label:string,key:keyof Values,options?:{type?:string;placeholder?:string;required?:boolean;min?:string})=><label className="block min-w-0"><span className={field}>{label}</span><input className={input} required={options?.required!==false} type={options?.type||'text'} min={options?.min} value={form[key]} onChange={e=>set(key,e.target.value)} placeholder={options?.placeholder}/></label>;
- if(completed)return <main className="page-wrap page-space min-w-0"><section className="mx-auto max-w-2xl rounded-xl border border-[#dae4ed] bg-white p-5 text-center shadow-sm sm:p-10"><CheckCircle2 className="mx-auto text-[#2d967c]" size={44}/><h1 className="mt-4 text-3xl font-semibold">Walk-in request recorded</h1><p className="mt-3 break-all text-xl font-semibold text-[#0b4d98]">{completed.reference}</p><p className="mt-3 text-sm text-[#748498]">Status: Tentative. This client does not have a website login. Staff must communicate with them using their provided contact information; date confirmation remains a separate review.</p><div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row"><Link href={`${base}/${completed.id}`} className="btn">Review booking</Link><button className="btn btn-ghost" onClick={()=>{setCompleted(null);setForm(initial);setCountry('PH');setConsent(false);setPhoto('');setStep(1);}}>New walk-in</button></div></section></main>;
+ if(completed)return <main className={bookingStyles.page}><div className={`${bookingStyles.shell} py-4 sm:py-9`}>
+ <BookingSuccessCard reference={completed.reference} title="Walk-in inquiry recorded" message="The customer's inquiry is saved as Tentative. They do not have a Client portal account, so contact them using the details they provided. Staff must review the preferred date before confirming." viewHref={`${base}/${completed.id}`} onNew={()=>{setCompleted(null);setForm(initial);setCountry('PH');setConsent(false);setPhoto('');setStep(1);}} />
+ </div></main>;
  return <main className="page-wrap page-space min-w-0"><PageTitle title="Create walk-in booking" subtitle="Authorized staff can capture an inquiry for a client without creating a website account."/>
  <div className="mb-6 flex flex-wrap items-center gap-3"><span className="rounded-full bg-[#e4eef8] px-4 py-2 text-sm font-semibold text-[#0b4d98]">Step {step} of 2</span><span className="text-sm text-[#748498]">{step===1?'Event and customer information':'Preferences and privacy consent'}</span></div>
  {error&&<p className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">{error}</p>}

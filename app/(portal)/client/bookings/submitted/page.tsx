@@ -1,3 +1,18 @@
-import {pagePermission} from '@/lib/access';
-import Link from 'next/link';import {redirect} from 'next/navigation';import {actor} from '@/lib/auth';import {readBooking} from '@/models/read';import {Panel,Status} from '@/components/ui/Blocks';
-export default async function Submitted({searchParams}:{searchParams:Promise<{id?:string}>}){await pagePermission('bookings.view.own');const u=await actor();if(!u)redirect('/login');const {id}=await searchParams;if(!id)redirect('/client/bookings');const b=await readBooking(id,u);return <main className="page-wrap page-space"><h2>Booking request submitted</h2><div style={{maxWidth:650,margin:'35px auto'}}><Panel><div style={{textAlign:'center',padding:'20px 8px 28px'}}><Status value={b.status}/><h1 style={{margin:'23px 0'}}>Your inquiry has been recorded.</h1><p>Request ID: <strong>{b.reference}</strong> • Status: {b.status}</p><p className="hint" style={{margin:'35px 0 43px'}}>DM Events will review your date, requested package and event preferences. Updates and messages will appear in your client account.</p><div className="hero-buttons" style={{justifyContent:'center'}}><Link className="btn" href={`/client/bookings/${b.id}`}>View My Booking</Link><Link className="btn btn-dark" href={`/client/messages?booking=${b.id}`}>Message DM Events</Link></div></div></Panel></div></main>}
+import { pagePermission } from '@/lib/access';
+import { redirect } from 'next/navigation';
+import { actor } from '@/lib/auth';
+import { readBooking } from '@/models/read';
+import { BookingSuccessCard } from '@/components/ui/BookingFeedback';
+import { bookingStyles as s } from '@/components/ui/BookingSurface';
+
+export default async function Submitted({ searchParams }: { searchParams: Promise<{ id?: string }> }) {
+  await pagePermission('bookings.view.own');
+  const user = await actor();
+  if (!user) redirect('/login');
+  const { id } = await searchParams;
+  if (!id) redirect('/client/bookings');
+  const booking = await readBooking(id, user);
+  return <main className={s.page}><div className={`${s.shell} py-4 sm:py-9`}>
+    <BookingSuccessCard reference={booking.reference} status={booking.status} title="Your event journey begins here" message="Your booking request has been submitted. Our team will review the date, package and event preferences, and keep you updated through your Client portal." viewHref={`/client/bookings/${booking.id}`} messageHref={`/client/messages?booking=${booking.id}`}/>
+  </div></main>;
+}

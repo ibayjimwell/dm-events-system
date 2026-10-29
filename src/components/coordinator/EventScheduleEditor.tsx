@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { api, json } from '@/api-client/http';
 import { InlineSkeleton } from '@/components/ui/LoadingSkeleton';
 import BookingChangeDialog, { type BookingChange } from '@/components/ui/BookingChangeDialog';
+import { bookingStyles as s } from '@/components/ui/BookingSurface';
+import { AlertCircle, CheckCircle2, Clock3, ShieldCheck } from 'lucide-react';
 
 type Schedule = {
   id: string; reference: string; status: string; updatedAt: string;
@@ -70,28 +72,27 @@ export default function EventScheduleEditor({ booking, canEdit, onSaved }: {
     } finally { setBusy(false); }
   }
   return <>
-    <section className="mt-6 rounded-xl border border-[#dae4ed] bg-white p-4 sm:p-5">
-      <h3 className="mb-2 text-lg font-semibold">Event operations schedule</h3>
-      <p className="hint mb-5">Run-sheet details are internal. The preferred date stays unchanged; Held/Confirmed dates remain exclusive.</p>
+    <div className={s.form}>
+      <div className={`${s.alert} mb-1`}><ShieldCheck size={18} className="mt-0.5 shrink-0"/><span>Run-sheet notes are private to staff. The event date stays unchanged and Held/Confirmed reservations remain exclusive.</span></div>
       {staffLoading && <InlineSkeleton rows={1} label="Loading coordinator directory" />}
-      <form onSubmit={preview} className="grid gap-4">
+      <form onSubmit={preview} className={s.form}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <label className="field">Event start time<input type="time" value={start} onChange={e => setStart(e.target.value)} disabled={!canEdit || booking.status === 'CANCELLED' || busy} /></label>
-          <label className="field">Event end time<input type="time" value={end} onChange={e => setEnd(e.target.value)} disabled={!canEdit || booking.status === 'CANCELLED' || busy} /></label>
+          <div><label htmlFor="ops-start-time">Event start time</label><input id="ops-start-time" className={s.input} type="time" value={start} onChange={e => setStart(e.target.value)} disabled={!canEdit || booking.status === 'CANCELLED' || busy}/></div>
+          <div><label htmlFor="ops-end-time">Event end time</label><input id="ops-end-time" className={s.input} type="time" value={end} onChange={e => setEnd(e.target.value)} disabled={!canEdit || booking.status === 'CANCELLED' || busy}/></div>
         </div>
-        <label className="field">Assigned event coordinator
-          <select value={assigned} onChange={e => setAssigned(e.target.value)} disabled={!canEdit || booking.status === 'CANCELLED' || busy || staffLoading}>
+        <div><label htmlFor="ops-coordinator">Assigned event coordinator</label>
+          <select id="ops-coordinator" className={s.input} value={assigned} onChange={e => setAssigned(e.target.value)} disabled={!canEdit || booking.status === 'CANCELLED' || busy || staffLoading}>
             <option value="">Unassigned</option>
-            {assigned && !staff.some(s => s.id === assigned) && <option value={assigned}>Previously assigned (inactive)</option>}
+            {assigned && !staff.some(member => member.id === assigned) && <option value={assigned}>Previously assigned (inactive)</option>}
             {staff.map(member => <option value={member.id} key={member.id}>{member.name}</option>)}
           </select>
-        </label>
-        <label className="field">Internal run-sheet notes<textarea rows={4} maxLength={3000} value={notes} onChange={e => setNotes(e.target.value)} disabled={!canEdit || booking.status === 'CANCELLED' || busy} placeholder="Venue access, arrival instructions, supplier timings, setup and teardown notes…" /></label>
-        {error && <p className="error" role="alert">{error}</p>}
-        {success && <p className="notice" role="status">{success}</p>}
-        {canEdit && <button className="btn" type="submit" disabled={busy || booking.status === 'CANCELLED'}>{busy ? 'Saving…' : 'Review schedule changes'}</button>}
+        </div>
+        <div><label htmlFor="ops-run-sheet">Internal run-sheet notes</label><textarea id="ops-run-sheet" className={s.input} rows={4} maxLength={3000} value={notes} onChange={e => setNotes(e.target.value)} disabled={!canEdit || booking.status === 'CANCELLED' || busy} placeholder="Venue access, arrival instructions, setup timeline and supplier coordination"/></div>
+        {error && <div className={`${s.alert} ${s.alertDanger}`} role="alert"><AlertCircle size={17} className="shrink-0"/>{error}</div>}
+        {success && <div className={`${s.alert} ${s.alertSuccess}`} role="status"><CheckCircle2 size={17} className="shrink-0"/>{success}</div>}
+        {canEdit && <button className={s.actionLink} type="submit" disabled={busy || booking.status === 'CANCELLED'}><Clock3 size={17}/>{busy ? 'Saving…' : 'Review schedule changes'}</button>}
       </form>
-    </section>
-    <BookingChangeDialog open={confirmOpen} reference={booking.reference} changes={changes} busy={busy} error={error} onCancel={() => setConfirmOpen(false)} onConfirm={() => void save()} />
+    </div>
+    <BookingChangeDialog open={confirmOpen} reference={booking.reference} changes={changes} busy={busy} error={error} onCancel={() => setConfirmOpen(false)} onConfirm={() => void save()}/>
   </>;
 }
