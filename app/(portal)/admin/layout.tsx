@@ -2,8 +2,7 @@ export const dynamic = 'force-dynamic';
 import { redirect } from "next/navigation";
 import { actor } from "@/lib/auth";
 import { permissionSet } from "@/lib/access";
-import SiteNav from "@/components/shared/SiteNav";
-import Footer from "@/components/shared/Footer";
+import PortalMessengerFrame from "@/components/shared/PortalMessengerFrame";
 export default async function AdminLayout({
   children,
 }: {
@@ -28,10 +27,8 @@ export default async function AdminLayout({
   if (!adminModules.some((p) => permissions.has(p)))
     redirect(user.role === "CLIENT" ? "/client" : "/coordinator");
   return (
-    <>
-      <SiteNav role={user.role} permissions={[...permissions]} />
+    <PortalMessengerFrame role={user.role} permissions={[...permissions]} footerLabel="ADMIN MODULE">
       {children}
-      <Footer label="ADMIN MODULE" />
-    </>
+    </PortalMessengerFrame>
   );
 }

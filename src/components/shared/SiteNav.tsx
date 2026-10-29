@@ -174,6 +174,7 @@ export default function SiteNav({
       <Link
         key={item.href}
         href={item.href}
+        prefetch={item.href.endsWith('/messages') ? false : undefined}
         onClick={() => { setMobileOpen(false); setSettingsOpen(false); }}
         aria-current={active ? 'page' : undefined}
         className={inMenu

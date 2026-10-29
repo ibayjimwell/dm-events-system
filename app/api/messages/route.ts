@@ -5,8 +5,8 @@ import { tryImmediateDelivery } from "@/lib/notifications/worker";
 import { route, ok, readJson, HttpError } from "@/lib/http";
 import { requireActor, audit, checkAuthLimit } from "@/lib/auth";
 import { db } from "@/db";
-import { messages, messageReads, mediaAssets } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { messages, messageReads, mediaAssets, messageTyping, users } from "@/db/schema";
+import { eq, and, gt, ne } from "drizzle-orm";
 import { readBooking, readConversation } from "@/models/read";
 import { messageInput, messageReadInput } from "@/lib/validators";
 
@@ -17,7 +17,16 @@ export const GET = route(async (req) => {
   const id = new URL(req.url).searchParams.get("bookingId") || "";
   if (!id) throw new HttpError(400, "bookingId required");
   const data = await readConversation(id, u);
-  return ok({ messages: data });
+  const [reads, typing] = await Promise.all([
+    db.select({ userId: messageReads.userId, role: users.role, lastReadAt: messageReads.lastReadAt })
+      .from(messageReads)
+      .innerJoin(users, eq(users.id, messageReads.userId))
+      .where(eq(messageReads.bookingId, id)),
+    db.select({ userId: messageTyping.userId, expiresAt: messageTyping.expiresAt })
+      .from(messageTyping)
+      .where(and(eq(messageTyping.bookingId, id), eq(messageTyping.isTyping, true), gt(messageTyping.expiresAt, new Date()), ne(messageTyping.userId, u.id))),
+  ]);
+  return ok({ messages: data, reads, typing, viewerId: u.id });
 });
 
 export const POST = route(async (req) => {
@@ -80,8 +89,14 @@ export const POST = route(async (req) => {
     }
     return [newMessage];
   });
-  await audit(u.id, "MESSAGE_SENT", "booking", v.bookingId);
-  if (u.role === "COORDINATOR") await tryImmediateDelivery(v.bookingId);
+  // Email/SMS is best-effort after the durable message has been committed.
+  // A gateway failure must never cause a duplicate message on client retry.
+  try { await audit(u.id, "MESSAGE_SENT", "booking", v.bookingId); }
+  catch (error) { console.error('Message audit failed', error); }
+  if (u.role === "COORDINATOR") {
+    try { await tryImmediateDelivery(v.bookingId); }
+    catch (error) { console.error('Message notification delivery deferred', error); }
+  }
   return ok({ message: m }, 201);
 });
 export const PATCH = route(async (req) => {

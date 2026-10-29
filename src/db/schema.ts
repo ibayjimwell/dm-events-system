@@ -274,6 +274,23 @@ export const messageReads = pgTable(
   },
   (t) => [primaryKey({ columns: [t.bookingId, t.userId] })],
 );
+/** Ephemeral typing presence, persisted briefly so the server can bridge Supabase Realtime
+ * to custom-session browser clients without exposing a Supabase privileged key. */
+export const messageTyping = pgTable(
+  "message_typing",
+  {
+    bookingId: uuid("booking_id").notNull().references((): AnyPgColumn => bookings.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    isTyping: boolean("is_typing").notNull().default(false),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.bookingId, t.userId] }),
+    index("message_typing_expires_idx").on(t.expiresAt),
+  ],
+);
+
 export const siteContent = pgTable("site_content", {
   id: varchar("id", { length: 24 }).primaryKey().default("main"),
   heroTitle: text("hero_title")

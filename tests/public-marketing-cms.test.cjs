@@ -41,7 +41,8 @@ test('homepage sections are persisted in an additive SQL migration', () => {
   assert.match(read('drizzle/0006_public_homepage_content.sql'), /ADD COLUMN IF NOT EXISTS "homepage" jsonb NOT NULL DEFAULT '\{\}'::jsonb/);
   assert.match(read('src/db/schema.ts'), /homepage:\s*jsonb\("homepage"\)/);
   const journal = JSON.parse(read('drizzle/meta/_journal.json'));
-  assert.equal(journal.entries.at(-1).tag, '0006_public_homepage_content');
+  assert.ok(journal.entries.some(entry => entry.tag === '0006_public_homepage_content')); // New migrations can follow the CMS migration.
+  assert.equal(journal.entries.at(-1).tag, '0007_realtime_chat_presence');
 });
 
 test('website content remains draft/publish gated and never exposes drafts to public users', () => {

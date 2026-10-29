@@ -12,8 +12,9 @@ test('client navigation preserves App Router layouts and server authentication b
     const layout = src(`app/(portal)/${role}/layout.tsx`);
     assert.match(layout, /force-dynamic/);
     assert.match(layout, /actor\(/);
-    assert.match(layout, /SiteNav/);
+    assert.match(layout, /PortalMessengerFrame/);
   }
+  assert.match(src('src/components/shared/PortalMessengerFrame.tsx'), /<SiteNav role=\{role\}/);
   assert.match(src('src/components/shared/SiteNav.tsx'), /from 'next\/link'/);
   assert.match(src('app/layout.tsx'), /GlobalNetworkSkeleton/);
   assert.match(src('app/(portal)/loading.tsx'), /RouteSkeleton/);
