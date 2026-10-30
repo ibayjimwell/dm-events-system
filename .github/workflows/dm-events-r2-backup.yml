@@ -1,0 +1,58 @@
+name: DM Events - Encrypted Cloudflare R2 database backup
+on:
+  workflow_dispatch:
+    inputs:
+      backup_id:
+        description: "Queued backup ID from Admin UI (leave blank for Actions manual run)"
+        required: false
+        type: string
+  schedule:
+    - cron: '17 18 * * *' # 02:17 Asia/Manila (next day); GitHub schedules may be delayed.
+permissions:
+  contents: read
+concurrency:
+  group: dm-events-database-backup
+  cancel-in-progress: false
+jobs:
+  encrypted-postgres-backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: ${{ secrets.DM_DATABASE_URL }}
+      MIGRATION_DATABASE_URL: ${{ secrets.DM_MIGRATION_DATABASE_URL }}
+      BACKUP_S3_BUCKET: ${{ secrets.DM_R2_BUCKET }}
+      BACKUP_S3_ENDPOINT: ${{ secrets.DM_R2_ENDPOINT }}
+      BACKUP_S3_ACCESS_KEY_ID: ${{ secrets.DM_R2_ACCESS_KEY_ID }}
+      BACKUP_S3_SECRET_ACCESS_KEY: ${{ secrets.DM_R2_SECRET_ACCESS_KEY }}
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.DM_BACKUP_ENCRYPTION_KEY }}
+      RUN_SCHEDULED_BACKUP: ${{ github.event_name == 'schedule' && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Install PostgreSQL client tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-18
+          pg_dump --version
+      - name: Verify secret configuration
+        shell: bash
+        run: |
+          for key in DATABASE_URL MIGRATION_DATABASE_URL BACKUP_S3_BUCKET BACKUP_S3_ENDPOINT BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY BACKUP_ENCRYPTION_KEY; do
+            if [[ -z "${!key}" ]]; then echo "Missing GitHub Actions secret for ${key}" >&2; exit 1; fi
+          done
+      - name: Encrypted PostgreSQL backup to private R2 bucket
+        env:
+          BACKUP_ID: ${{ inputs.backup_id }}
+        run: |
+          if [[ -n "$BACKUP_ID" ]]; then
+            npm run backup -- "$BACKUP_ID"
+          else
+            npm run backup
+          fi

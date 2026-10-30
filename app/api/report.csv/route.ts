@@ -1,32 +1,43 @@
 import { requirePermission } from '@/lib/access';
-import { route } from '@/lib/http';
+import { route, HttpError } from '@/lib/http';
 import { audit } from '@/lib/auth';
 import { db } from '@/db';
 import { bookings, bookingValueEvents } from '@/db/schema';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
+import { buildAnalyticsCsv } from '@/lib/analyticsCsv';
 
-function csv(value: unknown) {
-  let text = String(value ?? '');
-  // Spreadsheet formula injection protection for user-entered data.
-  if (typeof value === 'string' && /^[=+@\-\t\r]/.test(text)) text = "'" + text;
-  return '"' + text.replace(/"/g, '""') + '"';
-}
-export const GET = route(async () => {
+export const runtime = 'nodejs';
+export const GET = route(async (req) => {
   const user = await requirePermission('analytics.export');
-  const movements = await db.select({
-    reference: bookings.reference, eventType: bookings.eventType, eventDate: bookings.eventDate,
-    recordedAt: bookingValueEvents.recordedAt, movementType: bookingValueEvents.eventType,
-    delta: bookingValueEvents.amountDelta, after: bookingValueEvents.valueAfter,
-  }).from(bookingValueEvents).innerJoin(bookings, eq(bookings.id, bookingValueEvents.bookingId))
-    .orderBy(desc(bookingValueEvents.recordedAt));
-  const columns = ['Booking reference', 'Event type', 'Event date', 'Recorded at UTC', 'Movement', 'Value change (PHP)', 'Confirmed value after (PHP)'];
-  const rows = [columns.map(csv).join(','), ...movements.map(x => [
-    x.reference, x.eventType, x.eventDate, x.recordedAt.toISOString(), x.movementType, Number(x.delta), Number(x.after),
-  ].map(csv).join(','))];
-  await audit(user.id, 'ANALYTICS_EXPORT', 'report', 'booking-value-events');
-  return new Response('\uFEFF' + rows.join('\r\n'), { headers: {
+  const url = new URL(req.url);
+  const month = url.searchParams.get('month') || 'all';
+  const movementType = url.searchParams.get('type') || 'ALL';
+  if (month !== 'all' && !/^20\d{2}-(0[1-9]|1[0-2])$/.test(month)) throw new HttpError(400, 'Invalid reporting month');
+  if (!['ALL', 'CONFIRMATION', 'ADJUSTMENT', 'REVERSAL'].includes(movementType)) throw new HttpError(400, 'Invalid movement filter');
+
+  const localMonth = sql<string>`to_char(${bookingValueEvents.recordedAt} AT TIME ZONE 'Asia/Manila', 'YYYY-MM')`;
+  const [monthly, movements] = await Promise.all([
+    db.select({
+      month: localMonth,
+      amount: sql<string>`coalesce(sum(${bookingValueEvents.amountDelta}), 0)::text`,
+      gross: sql<string>`coalesce(sum(CASE WHEN ${bookingValueEvents.amountDelta} > 0 THEN ${bookingValueEvents.amountDelta} ELSE 0 END), 0)::text`,
+      reductions: sql<string>`coalesce(sum(CASE WHEN ${bookingValueEvents.amountDelta} < 0 THEN -${bookingValueEvents.amountDelta} ELSE 0 END), 0)::text`,
+      count: sql<number>`count(*) FILTER (WHERE ${bookingValueEvents.eventType} = 'CONFIRMATION')::int`,
+    }).from(bookingValueEvents).groupBy(localMonth).orderBy(localMonth),
+    db.select({
+      reference: bookings.reference, eventType: bookings.eventType, eventDate: bookings.eventDate,
+      recordedAt: bookingValueEvents.recordedAt, movementType: bookingValueEvents.eventType,
+      delta: bookingValueEvents.amountDelta, after: bookingValueEvents.valueAfter, note: bookingValueEvents.note,
+    }).from(bookingValueEvents).innerJoin(bookings, eq(bookings.id, bookingValueEvents.bookingId))
+      .orderBy(desc(bookingValueEvents.recordedAt)),
+  ]);
+  const csv = buildAnalyticsCsv({ monthly, movements, month, movementType, exportedAt: new Date() });
+  await audit(user.id, 'ANALYTICS_EXPORT', 'report', 'confirmed-value-analytics', { month, movementType });
+  const filename = `dm-events-analytics-${month === 'all' ? 'all-periods' : month}-${movementType.toLowerCase()}.csv`;
+  return new Response(csv, { headers: {
     'Content-Type': 'text/csv; charset=utf-8',
-    'Content-Disposition': 'attachment; filename="dm-events-confirmed-value-ledger.csv"',
-    'Cache-Control': 'no-store',
+    'Content-Disposition': `attachment; filename="${filename}"`,
+    'Cache-Control': 'private, no-store',
+    'X-Content-Type-Options': 'nosniff',
   } });
 });

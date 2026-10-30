@@ -17,7 +17,8 @@
     "restore": "tsx scripts/restore.ts",
     "verify:source": "node scripts/verify-source.mjs",
     "test:notifications": "node --test tests/notification-providers.test.cjs && python3 -m unittest discover -s python-mail/tests -v",
-    "test:spa": "node --test tests/*.test.cjs"
+    "test:spa": "node --test tests/*.test.cjs",
+    "backup:verify": "tsx scripts/verify-backup.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.900.0",

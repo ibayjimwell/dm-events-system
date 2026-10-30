@@ -1,23 +1,139 @@
-import {db} from '@/db';import {backupLogs,systemSettings} from '@/db/schema';import {eq,lt} from 'drizzle-orm';import {randomBytes,createCipheriv,createDecipheriv} from 'node:crypto';import {execFileSync} from 'node:child_process';import {S3Client,PutObjectCommand,GetObjectCommand,DeleteObjectCommand} from '@aws-sdk/client-s3';import {HttpError} from './http';
-const configured=()=>{
- const key=process.env.BACKUP_ENCRYPTION_KEY||'';
- if(!/^[a-f0-9]{64}$/i.test(key)||!process.env.BACKUP_S3_BUCKET||!process.env.BACKUP_S3_ACCESS_KEY_ID||!process.env.BACKUP_S3_SECRET_ACCESS_KEY)throw new HttpError(503,'Encrypted offsite backup destination is not configured');
- return Buffer.from(key,'hex');
-};
-const s3=()=>new S3Client({region:process.env.BACKUP_S3_REGION||'auto',endpoint:process.env.BACKUP_S3_ENDPOINT||undefined,forcePathStyle:!!process.env.BACKUP_S3_ENDPOINT,credentials:{accessKeyId:process.env.BACKUP_S3_ACCESS_KEY_ID!,secretAccessKey:process.env.BACKUP_S3_SECRET_ACCESS_KEY!}});
-function pgEnv(){const url=new URL(process.env.MIGRATION_DATABASE_URL||process.env.DATABASE_URL||'');if(!url.hostname)throw new HttpError(503,'Database backup connection missing');return {env:{...process.env,PGPASSWORD:decodeURIComponent(url.password),PGSSLMODE:'require'},args:['-h',url.hostname,'-p',url.port||'5432','-U',decodeURIComponent(url.username),'-d',url.pathname.replace(/^\//,''),'--no-owner','--no-privileges']};}
-export async function createBackup(performedBy:string|null=null){
- const key=configured();const [log]=await db.insert(backupLogs).values({performedBy,status:'RUNNING'}).returning();
- try{
-  const pg=pgEnv();const dump=execFileSync('pg_dump',[...pg.args,'--format=custom','--schema=public','--schema=drizzle'],{env:pg.env,maxBuffer:100*1024*1024,timeout:5*60*1000});
-  const iv=randomBytes(12);const cipher=createCipheriv('aes-256-gcm',key,iv);const data=Buffer.concat([cipher.update(dump),cipher.final()]);
-  const blob=Buffer.concat([Buffer.from('DME1'),iv,cipher.getAuthTag(),data]);
-  const storageKey=`dm-events/${new Date().toISOString().slice(0,10)}/${log.id}.dump.aes256gcm`;
-  await s3().send(new PutObjectCommand({Bucket:process.env.BACKUP_S3_BUCKET!,Key:storageKey,Body:blob,ContentType:'application/octet-stream',Metadata:{format:'pg-custom-encrypted-aes256gcm'}}));
-  await db.update(backupLogs).set({status:'SUCCESS',storageKey,sizeBytes:blob.length}).where(eq(backupLogs.id,log.id));
-  const [settings]=await db.select().from(systemSettings).where(eq(systemSettings.id,'main'));
-  if(settings){const old=await db.select().from(backupLogs).where(lt(backupLogs.createdAt,new Date(Date.now()-settings.retentionDays*86400000)));for(const b of old){if(b.storageKey){await s3().send(new DeleteObjectCommand({Bucket:process.env.BACKUP_S3_BUCKET!,Key:b.storageKey}));}await db.delete(backupLogs).where(eq(backupLogs.id,b.id));}}
-  return {id:log.id,status:'SUCCESS',sizeBytes:blob.length};
- }catch(e){await db.update(backupLogs).set({status:'FAILED',error:String(e).slice(0,500)}).where(eq(backupLogs.id,log.id));throw e;}
+import { db } from '@/db';
+import { backupLogs, systemSettings } from '@/db/schema';
+import { and, eq, lt } from 'drizzle-orm';
+import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { HttpError } from '@/lib/http';
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const prefix = 'dm-events/postgres/';
+
+function configuration() {
+  const secret = process.env.BACKUP_ENCRYPTION_KEY || '';
+  if (!/^[0-9a-f]{64}$/i.test(secret)) throw new HttpError(503, 'BACKUP_ENCRYPTION_KEY must contain 64 hex characters');
+  const bucket = process.env.BACKUP_S3_BUCKET;
+  const endpoint = process.env.BACKUP_S3_ENDPOINT;
+  const accessKeyId = process.env.BACKUP_S3_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.BACKUP_S3_SECRET_ACCESS_KEY;
+  if (!bucket || !endpoint || !accessKeyId || !secretAccessKey || !/^https:\/\/[a-z0-9.-]+\.r2\.cloudflarestorage\.com$/i.test(endpoint)) {
+    throw new HttpError(503, 'Cloudflare R2 backup environment variables are not configured');
+  }
+  return { encryptionKey: Buffer.from(secret, 'hex'), bucket, endpoint, accessKeyId, secretAccessKey };
 }
-export async function decryptBackup(storageKey:string){const key=configured();const result=await s3().send(new GetObjectCommand({Bucket:process.env.BACKUP_S3_BUCKET!,Key:storageKey}));if(!result.Body)throw new Error('Backup object empty');const raw=Buffer.from(await result.Body.transformToByteArray());if(raw.subarray(0,4).toString()!=='DME1')throw new Error('Unexpected backup format');const decipher=createDecipheriv('aes-256-gcm',key,raw.subarray(4,16));decipher.setAuthTag(raw.subarray(16,32));return Buffer.concat([decipher.update(raw.subarray(32)),decipher.final()]);}
+
+function r2(config: ReturnType<typeof configuration>) {
+  return new S3Client({
+    region: 'auto',
+    endpoint: config.endpoint,
+    forcePathStyle: true,
+    credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
+    maxAttempts: 3,
+  });
+}
+
+function dumpDatabase() {
+  const connection = process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL;
+  if (!connection) throw new HttpError(503, 'MIGRATION_DATABASE_URL is required for backup');
+  const url = new URL(connection);
+  if (!['postgres:', 'postgresql:'].includes(url.protocol) || !url.hostname || !url.username || !url.password) {
+    throw new HttpError(503, 'Invalid PostgreSQL backup connection string');
+  }
+  // Use argv instead of shell interpolation; never include a password in the command line.
+  return execFileSync(process.env.PG_DUMP_BIN || 'pg_dump', [
+    '--host', url.hostname, '--port', url.port || '5432',
+    '--username', decodeURIComponent(url.username), '--dbname', decodeURIComponent(url.pathname.slice(1)),
+    '--format=custom', '--no-owner', '--no-privileges', '--schema=public', '--schema=drizzle',
+  ], {
+    env: { ...process.env, PGPASSWORD: decodeURIComponent(url.password), PGSSLMODE: 'require' },
+    timeout: 10 * 60 * 1000,
+    maxBuffer: 150 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
+// DME1 | 12-byte IV | 16-byte GCM tag | ciphertext; backward compatible with existing restores.
+function encryptDump(dump: Buffer, key: Buffer) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(dump), cipher.final()]);
+  return Buffer.concat([Buffer.from('DME1'), iv, cipher.getAuthTag(), encrypted]);
+}
+
+function decryptDump(encrypted: Buffer, key: Buffer) {
+  if (encrypted.length < 33 || encrypted.subarray(0, 4).toString() !== 'DME1') throw new Error('Unsupported backup file format');
+  const decipher = createDecipheriv('aes-256-gcm', key, encrypted.subarray(4, 16));
+  decipher.setAuthTag(encrypted.subarray(16, 32));
+  return Buffer.concat([decipher.update(encrypted.subarray(32)), decipher.final()]);
+}
+
+function safeError(error: unknown) {
+  // Do not store raw process stderr: connection URLs, passwords or hostnames might be included.
+  if (error instanceof HttpError) return error.message;
+  return 'PostgreSQL export, encryption, or Cloudflare R2 upload failed. Review the private backup runner logs.';
+}
+
+/** Must run on a host with pg_dump, e.g. GitHub Actions or an authorized local maintenance machine. */
+export async function createBackup(performedBy: string | null = null, queuedLogId?: string) {
+  let logId: string;
+  if (queuedLogId) {
+    if (!uuidPattern.test(queuedLogId)) throw new Error('Invalid queued backup ID');
+    const [existing] = await db.update(backupLogs).set({ status: 'RUNNING' })
+      .where(and(eq(backupLogs.id, queuedLogId), eq(backupLogs.status, 'QUEUED'))).returning({ id: backupLogs.id });
+    if (!existing) throw new Error('Queued backup not found or already started');
+    logId = existing.id;
+  } else {
+    const [created] = await db.insert(backupLogs).values({ performedBy, status: 'RUNNING' }).returning({ id: backupLogs.id });
+    logId = created.id;
+  }
+  let client: S3Client | null = null;
+  try {
+    const config = configuration();
+    client = r2(config);
+    const key = `${prefix}${new Date().toISOString().slice(0, 10)}/${logId}.dump.aes256gcm`;
+    const dump = dumpDatabase();
+    if (!dump.length || dump.subarray(0, 5).toString() !== 'PGDMP') throw new Error('pg_dump did not return a valid custom-format archive');
+    const encrypted = encryptDump(dump, config.encryptionKey);
+    // Confirm encryption can be decoded before uploading; never save plaintext in object storage.
+    if (!decryptDump(encrypted, config.encryptionKey).equals(dump)) throw new Error('Backup encryption verification failed');
+    await client.send(new PutObjectCommand({
+      Bucket: config.bucket, Key: key, Body: encrypted, ContentType: 'application/octet-stream',
+      Metadata: { format: 'pg-custom-aes256gcm', origin: 'dm-events' },
+    }));
+    const head = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }));
+    if (Number(head.ContentLength) !== encrypted.length) throw new Error('Backup storage size verification failed');
+    await db.update(backupLogs).set({ status: 'SUCCESS', storageKey: key, sizeBytes: encrypted.length, error: null })
+      .where(eq(backupLogs.id, logId));
+    // Cleanup is best effort and never changes the status of a successful upload.
+    try {
+      const [settings] = await db.select().from(systemSettings).where(eq(systemSettings.id, 'main'));
+      if (settings?.retentionDays) {
+        const old = await db.select().from(backupLogs).where(and(
+          eq(backupLogs.status, 'SUCCESS'), lt(backupLogs.createdAt, new Date(Date.now() - settings.retentionDays * 86400000)),
+        ));
+        for (const row of old) {
+          if (!row.storageKey?.startsWith(prefix)) continue;
+          await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: row.storageKey }));
+          await db.update(backupLogs).set({ status: 'EXPIRED', storageKey: null }).where(eq(backupLogs.id, row.id));
+        }
+      }
+    } catch { console.warn('Backup uploaded, but retention cleanup needs attention'); }
+    return { id: logId, status: 'SUCCESS' as const, sizeBytes: encrypted.length };
+  } catch (error) {
+    await db.update(backupLogs).set({ status: 'FAILED', error: safeError(error) }).where(eq(backupLogs.id, logId));
+    throw new Error(safeError(error));
+  } finally {
+    client?.destroy();
+  }
+}
+
+export async function decryptBackup(storageKey: string) {
+  if (!storageKey.startsWith(prefix) && !storageKey.startsWith('dm-events/')) throw new Error('Invalid backup storage key');
+  const config = configuration();
+  const client = r2(config);
+  try {
+    const result = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: storageKey }));
+    if (!result.Body) throw new Error('Cloudflare R2 returned an empty backup');
+    return decryptDump(Buffer.from(await result.Body.transformToByteArray()), config.encryptionKey);
+  } finally { client.destroy(); }
+}

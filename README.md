@@ -194,3 +194,7 @@ docker run --rm -p 3000:3000 --env-file .env dm-events-web
 ```
 
 Use an HTTPS reverse proxy and `SESSION_COOKIE_SECURE=true` in production. The minimal runtime container does not include `pg_dump`/`pg_restore`; schedule backups from a separate trusted operator host with PostgreSQL tools and S3 access, or extend your container image responsibly. See `docs/TRANSACTION_MATRIX.md` for the exact mapping of all 27 PDF steps.
+
+## Cloudflare R2 database backups and Analytics CSV
+
+See [CLOUDFLARE_R2_SETUP.md](./CLOUDFLARE_R2_SETUP.md) for exact Cloudflare, GitHub Actions, Vercel, encryption, verification and restore steps. The Admin backup button queues a GitHub Actions job; it does not run `pg_dump` inside Vercel. Analytics exports include a summary, all-month trend, event-type breakdown and detailed movements in one CSV.
