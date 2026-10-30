@@ -149,7 +149,7 @@ function Fact({ icon, label, children, wide = false }: {
 }
 
 export default function BookedEventExperience({ id }: { id: string }) {
-  const { data, error, loading, refresh } = useLiveQuery(() => api<{ booking: Booking }>(`/api/bookings/${id}`), [id]);
+  const { data, error, loading, refresh } = useLiveQuery(() => api<{ booking: Booking }>(`/api/bookings/${id}`), [id],{cacheKey:`client:/api/bookings/${id}`,realtimeKinds:['bookings','booking_history','booking_value_events']});
   const booking = data?.booking;
   const [editing, setEditing] = useState(false);
   const [theme, setTheme] = useState('');

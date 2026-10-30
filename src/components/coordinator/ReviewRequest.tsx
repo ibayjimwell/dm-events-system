@@ -34,7 +34,7 @@ export default function ReviewRequest({ id, role, canUpdateStatus = true, canMes
   const [savedOpen, setSavedOpen] = useState(false);
   const [savedChanges, setSavedChanges] = useState<BookingChange[]>([]);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
-  const { data, loading, error, refresh } = useLiveQuery(() => api<{ booking: Detail }>(`/api/bookings/${id}`), [id]);
+  const { data, loading, error, refresh } = useLiveQuery(() => api<{ booking: Detail }>(`/api/bookings/${id}`), [id],{cacheKey:`staff:/api/bookings/${id}`,realtimeKinds:['bookings','booking_history']});
   const booking = data?.booking;
   const [status, setStatus] = useState<Detail['status']>('TENTATIVE');
   const [value, setValue] = useState('');

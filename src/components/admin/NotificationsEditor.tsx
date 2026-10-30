@@ -37,7 +37,7 @@ const pillStyle: Record<string, string> = {
 
 export default function NotificationsEditor() {
   const { data, loading, error, refresh } = useLiveQuery(
-    () => api<{ notifications: Item[] }>('/api/notifications'), [],
+    () => api<{ notifications: Item[] }>('/api/notifications'), [], {cacheKey:'admin:/api/notifications',realtimeKinds:['notification_outbox']},
   );
   const [busyId, setBusyId] = useState<string | null>(null);
   const [dispatching, setDispatching] = useState(false);

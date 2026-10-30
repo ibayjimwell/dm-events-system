@@ -13,7 +13,7 @@ type Form = { name: string; description: string; inclusions: string; imageId: st
 const blank: Form = { name: '', description: '', inclusions: '', published: false, sortOrder: 0, imageId: '' };
 
 export default function PackageEditor() {
-  const { data, loading, error, refresh } = useLiveQuery(() => api<{ packages: P[] }>('/api/packages'), []);
+  const { data, loading, error, refresh } = useLiveQuery(() => api<{ packages: P[] }>('/api/packages'), [],{cacheKey:'admin:/api/packages',realtimeKinds:['packages','media_assets']});
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState<Form>(blank);
   const [busy, setBusy] = useState(false);

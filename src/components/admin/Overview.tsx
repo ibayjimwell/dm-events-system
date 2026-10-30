@@ -14,8 +14,8 @@ const monthLabel=(value:string)=>new Date(`${value}-01T12:00:00`).toLocaleDateSt
 
 export default function Overview({permissions=[]}:{permissions?:Permission[]}) {
   const canAnalytics=permissions.includes('analytics.view');
-  const summary=useLiveQuery(()=>api<Summary>('/api/summary'),[],{realtimeKinds:['bookings','booking_history','messages']});
-  const analytics=useLiveQuery(()=>canAnalytics?api<Analytics>('/api/analytics'):Promise.resolve({monthly:[]}),[canAnalytics],{realtimeKinds:['bookings','booking_history','confirmed_value_ledger']});
+  const summary=useLiveQuery(()=>api<Summary>('/api/summary'),[],{cacheKey:'admin:/api/summary',realtimeKinds:['bookings','booking_history','messages','message_reads','booking_value_events']});
+  const analytics=useLiveQuery(()=>canAnalytics?api<Analytics>('/api/analytics'):Promise.resolve({monthly:[]}),[canAnalytics],{cacheKey:canAnalytics?'admin:/api/analytics':undefined,realtimeKinds:['bookings','booking_history','booking_value_events']});
   const counts=summary.data?.counts;
   const months=analytics.data?.monthly.slice(-6).reverse()??[];
   const actions=[

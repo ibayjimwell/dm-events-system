@@ -19,7 +19,7 @@ const monthInManila = (stamp:string) => {
 const fullMonth = (month:string) => new Date(`${month}-01T12:00:00`).toLocaleDateString('en-PH',{month:'long',year:'numeric'});
 
 export default function Analytics({ canExport=true }: { canExport?:boolean }) {
-  const {data,loading,error} = useLiveQuery(()=>api<Report>('/api/analytics'),[]);
+  const {data,loading,error} = useLiveQuery(()=>api<Report>('/api/analytics'),[],{cacheKey:'admin:/api/analytics',realtimeKinds:['bookings','booking_history','booking_value_events']});
   const [selected,setSelected] = useState('');
   const [movementFilter,setMovementFilter] = useState<Filter>('ALL');
   const months = data?.monthly ?? [];

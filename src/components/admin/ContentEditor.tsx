@@ -56,8 +56,8 @@ function EditorInput({ title, value, onChange, multiline = false, maxLength = 60
 }
 
 export default function ContentEditor() {
-  const { data, loading, error, refresh } = useLiveQuery(() => api<{content: Site}>('/api/content'), []);
-  const { data: packData } = useLiveQuery(() => api<{packages: (PublicPackage & {published:boolean})[]}>('/api/packages'), []);
+  const { data, loading, error, refresh } = useLiveQuery(() => api<{content: Site}>('/api/content'), [],{cacheKey:'admin:/api/content',realtimeKinds:['site_content','media_assets']});
+  const { data: packData } = useLiveQuery(() => api<{packages: (PublicPackage & {published:boolean})[]}>('/api/packages'), [],{cacheKey:'admin:/api/packages',realtimeKinds:['packages']});
   const [form, setForm] = useState<ContentForm>(() => structuredClone(blank));
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');

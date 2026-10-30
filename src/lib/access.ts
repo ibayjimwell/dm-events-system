@@ -1,6 +1,7 @@
+import { cache } from 'react';
 import { db } from '@/db';
 import { userModulePermissions } from '@/db/schema';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import { requireActor, type Actor } from '@/lib/auth';
 import { HttpError } from '@/lib/http';
@@ -13,6 +14,12 @@ import {
   isPermission,
   type Permission,
 } from '@/lib/permissions';
+
+// React cache is scoped to one server render/request, never shared across users.
+const coordinatorOverrides = cache(async (userId: string) => db.select({
+  permission: userModulePermissions.permission,
+  allowed: userModulePermissions.allowed,
+}).from(userModulePermissions).where(eq(userModulePermissions.userId, userId)));
 
 /**
  * Compute all effective permissions for navigation and other server-rendered UI.
@@ -31,13 +38,7 @@ export async function permissionSet(user: Actor): Promise<Set<Permission>> {
 
   // TypeScript correctly narrows user.role to COORDINATOR from this point.
   const effective = new Set<Permission>(DEFAULT_PERMISSIONS.COORDINATOR);
-  const overrides = await db
-    .select({
-      permission: userModulePermissions.permission,
-      allowed: userModulePermissions.allowed,
-    })
-    .from(userModulePermissions)
-    .where(eq(userModulePermissions.userId, user.id));
+  const overrides = await coordinatorOverrides(user.id);
 
   for (const grant of overrides) {
     if (
@@ -77,16 +78,8 @@ export async function can(user: Actor, permission: Permission): Promise<boolean>
     return false;
   }
 
-  const [override] = await db
-    .select({ allowed: userModulePermissions.allowed })
-    .from(userModulePermissions)
-    .where(
-      and(
-        eq(userModulePermissions.userId, user.id),
-        eq(userModulePermissions.permission, permission),
-      ),
-    );
-
+  const overrides = await coordinatorOverrides(user.id);
+  const override = overrides.find(row => row.permission === permission);
   return override?.allowed ?? defaultAccess(user.role, permission);
 }
 

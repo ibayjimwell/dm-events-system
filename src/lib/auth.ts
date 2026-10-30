@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { db } from '@/db';
 import { users, sessions, authTokens, authLimits } from '@/db/schema';
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
@@ -12,13 +13,13 @@ export const digest=(v:string)=>createHash('sha256').update(v).digest('hex');
 const randomToken=()=>randomBytes(32).toString('base64url');
 export async function hashPassword(value:string){return bcrypt.hash(value,12);}
 export async function comparePassword(plain:string,hash:string){return bcrypt.compare(plain,hash);}
-export async function actor():Promise<Actor|null> {
+export const actor = cache(async ():Promise<Actor|null> => {
  const token=(await cookies()).get(cookieName)?.value;
  if(!token)return null;
  const rows=await db.select({id:users.id,email:users.email,fullName:users.fullName,phone:users.phone,role:users.role,isActive:users.isActive,emailVerifiedAt:users.emailVerifiedAt}).from(sessions).innerJoin(users,eq(sessions.userId,users.id)).where(and(eq(sessions.tokenHash,digest(token)),gt(sessions.expiresAt,new Date()))).limit(1);
  if(!rows.length || !rows[0].isActive)return null;
  return rows[0];
-}
+});
 export async function requireActor(...roles:Role[]):Promise<Actor> {
  const user=await actor();if(!user)throw new HttpError(401,'Please log in');
  if(roles.length && !roles.includes(user.role))throw new HttpError(403,'Not authorized for this action');

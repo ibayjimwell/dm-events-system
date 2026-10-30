@@ -30,9 +30,10 @@ type Conversation = {
   typing: { userId: string; expiresAt: string }[];
 };
 const philippinesDate = new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' });
+const philippinesDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' });
 const philippinesTime = new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' });
 function dayKey(date: string) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(date));
+  return philippinesDay.format(new Date(date));
 }
 const formatDate = (date: string) => philippinesDate.format(new Date(date));
 const formatTime = (date: string) => philippinesTime.format(new Date(date));
@@ -65,6 +66,9 @@ export default function MessagesPanel({ role }: { role: Role }) {
   const [fileLabel, setFileLabel] = useState('');
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [optimistic, setOptimistic] = useState<Message[]>([]);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
   const [error, setError] = useState('');
   const [typedBy, setTypedBy] = useState<Record<string, number>>({});
   const [tick, setTick] = useState(Date.now());
@@ -82,11 +86,11 @@ export default function MessagesPanel({ role }: { role: Role }) {
 
 
   const all = useLiveQuery(() => api<{ threads: Thread[]; viewerId: string }>('/api/messages/threads'), [],
-    { subscribeToChanges: false, refreshOnFocus: false });
+    { subscribeToChanges: false, refreshOnFocus: false, cacheKey: `${role}:/api/messages/threads`, staleTimeMs: 12_000 });
   const conversation = useLiveQuery<Conversation>(() => selected
     ? api(`/api/messages?bookingId=${encodeURIComponent(selected)}`)
     : Promise.resolve({ viewerId: '', messages: [], reads: [], typing: [] }), [selected],
-    { subscribeToChanges: false, refreshOnFocus: false });
+    { subscribeToChanges: false, refreshOnFocus: false, cacheKey: `${role}:/api/messages?bookingId=${selected}`, staleTimeMs: 12_000 });
   const threads = all.data?.threads || [];
   const active = threads.find(t => t.id === selected);
   const text = drafts[selected] || '';
@@ -165,11 +169,6 @@ export default function MessagesPanel({ role }: { role: Role }) {
     };
   }, [all.refresh, conversation.refresh]);
 
-  useEffect(() => {
-    const timer = setInterval(() => setTick(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   const markRead = useCallback(async () => {
     if (!selected || !conversation.data || role === 'ADMIN' || document.visibilityState !== 'visible') return;
     const ownRead = conversation.data.reads.find(r => r.userId === viewerId)?.lastReadAt;
@@ -179,11 +178,17 @@ export default function MessagesPanel({ role }: { role: Role }) {
     readBusyRef.current.add(selected);
     try {
       await api('/api/messages', json('PATCH', { bookingId: selected }));
-      await all.refresh();
-      await conversation.refresh();
+      const readAt = new Date().toISOString();
+      conversation.setData(prev => prev ? {
+        ...prev,
+        reads: [...prev.reads.filter(row => row.userId !== viewerId), { userId: viewerId, role, lastReadAt: readAt }],
+      } : prev);
+      all.setData(prev => prev ? {
+        ...prev, threads: prev.threads.map(thread => thread.id === selected ? { ...thread, unread: 0 } : thread),
+      } : prev);
     } catch { /* Already-loaded conversation remains usable if a receipt fails. */ }
     finally { readBusyRef.current.delete(selected); }
-  }, [selected, viewerId, role, conversation.data, all.refresh, conversation.refresh]);
+  }, [selected, viewerId, role, conversation.data, all.setData, conversation.setData]);
 
   useEffect(() => {
     void markRead();
@@ -193,7 +198,7 @@ export default function MessagesPanel({ role }: { role: Role }) {
     return () => { window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus); };
   }, [markRead]);
 
-  const lastMessageId = conversation.data?.messages.at(-1)?.id;
+  const lastMessageId = optimistic.filter(m => m.bookingId === selected).at(-1)?.id ?? conversation.data?.messages.at(-1)?.id;
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [selected, lastMessageId]);
 
   const filtered = useMemo(() => threads.filter(t =>
@@ -202,6 +207,13 @@ export default function MessagesPanel({ role }: { role: Role }) {
   const unreadTotal = threads.reduce((sum, t) => sum + t.unread, 0);
   const othersTyping = Object.entries(typedBy).some(([id, expiry]) => id !== viewerId && expiry > tick)
     || !!conversation.data?.typing.some(t => t.userId !== viewerId && typedBy[t.userId] === undefined && new Date(t.expiresAt).getTime() > tick);
+
+  // Do not re-render an entire conversation every second when no one is typing.
+  useEffect(() => {
+    if (!othersTyping) return;
+    const timer = window.setInterval(() => setTick(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [othersTyping]);
 
   function changeDraft(value: string) {
     setDrafts(previous => ({ ...previous, [selected]: value }));
@@ -237,17 +249,47 @@ export default function MessagesPanel({ role }: { role: Role }) {
   async function send(event?: FormEvent) {
     event?.preventDefault();
     if (!selected || sending || uploading || role === 'ADMIN' || (!text.trim() && !assetId)) return;
-    setSending(true); setError('');
+    const bookingId = selected;
+    const body = text.trim();
+    const attachmentId = assetId || null;
+    const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimisticMessage: Message = {
+      id: tempId, bookingId, senderId: viewerId, senderName: 'You',
+      senderRole: role, body, assetId: attachmentId, createdAt: new Date().toISOString(),
+    };
+    // A message appears immediately. Network latency never clears the chat or
+    // resets its scroll position; failures restore the unsent composer text.
+    setOptimistic(prev => [...prev, optimisticMessage]);
+    setDrafts(prev => ({ ...prev, [bookingId]: '' }));
+    setAssetId(''); setFileLabel(''); setSending(true); setError('');
     try {
-      await api('/api/messages', json('POST', { bookingId: selected, body: text.trim(), assetId: assetId || null }));
+      const response = await api<{ message: { id: string; createdAt: string } }>(
+        '/api/messages', json('POST', { bookingId, body, assetId: attachmentId }));
       if (stopTypingRef.current) clearTimeout(stopTypingRef.current);
-      void signalTyping(selected, false);
-      setDrafts(prev => ({ ...prev, [selected]: '' }));
-      setAssetId(''); setFileLabel('');
-      await Promise.all([conversation.refresh(), all.refresh()]);
+      void signalTyping(bookingId, false);
+      // Immediately reconcile the server-generated ID; the scoped Realtime
+      // event subsequently refreshes all participants in the background.
+      conversation.setData(prev => {
+        if (!prev || selectedRef.current !== bookingId) return prev;
+        if (prev.messages.some(m => m.id === response.message.id)) return prev;
+        return { ...prev, messages: [...prev.messages, {
+          ...optimisticMessage, id: response.message.id,
+          createdAt: String(response.message.createdAt),
+        }] };
+      });
+      all.setData(prev => prev ? { ...prev, threads: prev.threads.map(thread =>
+        thread.id === bookingId ? {
+          ...thread, latest: { body, hasAttachment: !!attachmentId,
+            senderId: viewerId, createdAt: String(response.message.createdAt) },
+        } : thread) } : prev);
+      setOptimistic(prev => prev.filter(m => m.id !== tempId));
       inputRef.current?.focus();
-    } catch (e) { setError(e instanceof Error ? e.message : 'Message could not be sent. You can retry.'); }
-    finally { setSending(false); }
+    } catch (caught) {
+      setOptimistic(prev => prev.filter(m => m.id !== tempId));
+      setDrafts(prev => ({ ...prev, [bookingId]: prev[bookingId] || body }));
+      if (attachmentId) { setAssetId(attachmentId); setFileLabel('Photo attachment'); }
+      setError(caught instanceof Error ? caught.message : 'Message could not be sent. Your draft was restored.');
+    } finally { setSending(false); }
   }
   function handleKey(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -261,7 +303,7 @@ export default function MessagesPanel({ role }: { role: Role }) {
     return conversation.data.reads.some(read => read.role === recipientRole && read.userId !== viewerId
       && new Date(read.lastReadAt).getTime() >= new Date(message.createdAt).getTime());
   }
-  const messages = conversation.data?.messages || [];
+  const messages = [...(conversation.data?.messages || []), ...optimistic.filter(m => m.bookingId === selected)];
   const lastOwn = [...messages].reverse().find(m => m.senderId === viewerId)?.id;
   let previousDay = '';
 
@@ -336,7 +378,8 @@ export default function MessagesPanel({ role }: { role: Role }) {
                     </div>
                     <div className={`${styles.messageMeta} ${mine ? styles.ownMeta : ''}`}>
                       <time dateTime={message.createdAt}>{formatTime(message.createdAt)}</time>
-                      {mine && message.id === lastOwn && <span className={wasSeen(message) ? styles.seen : ''}>{wasSeen(message) ? <><CheckCheck size={15}/> Seen</> : <><Check size={15}/> Sent</>}</span>}
+                      {mine && message.id.startsWith('pending-') && <span role="status">Sending…</span>}
+                      {mine && message.id === lastOwn && !message.id.startsWith('pending-') && <span className={wasSeen(message) ? styles.seen : ''}>{wasSeen(message) ? <><CheckCheck size={15}/> Seen</> : <><Check size={15}/> Sent</>}</span>}
                     </div>
                   </div>
                 </div>

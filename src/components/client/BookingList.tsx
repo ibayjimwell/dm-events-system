@@ -12,7 +12,7 @@ type Item = { id: string; reference: string; eventType: string; eventDate: strin
 const tabs = ['ALL', 'TENTATIVE', 'HELD', 'CONFIRMED', 'CANCELLED'] as const;
 
 export default function BookingList() {
-  const { data, loading, error, refresh } = useLiveQuery(() => api<{ bookings: Item[] }>('/api/bookings'), []);
+  const { data, loading, error, refresh } = useLiveQuery(() => api<{ bookings: Item[] }>('/api/bookings'), [],{cacheKey:'client:/api/bookings',realtimeKinds:['bookings','booking_history']});
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<string>('ALL');
   const bookings = data?.bookings ?? [];

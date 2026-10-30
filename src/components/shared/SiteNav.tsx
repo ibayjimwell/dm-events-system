@@ -1,9 +1,9 @@
 'use client';
 
 import Image from 'next/image';
-import Link from 'next/link';
+import NextLink from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import {
   ArrowRight, BarChart3, CalendarDays, CalendarPlus,
   ChevronDown, ChevronRight, ClipboardList, FolderKanban,
@@ -13,9 +13,24 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { beginApiRequest } from '@/lib/api-activity';
+import { invalidateQuerySnapshots } from '@/lib/query-cache';
+import { closeLiveEvents } from '@/lib/live-events';
 import type { Role } from '@/lib/auth';
 import type { Permission } from '@/lib/permissions';
 import styles from './SiteNav.module.css';
+
+/**
+ * Warm only the route a user intends to open (hover/keyboard focus).
+ * Full viewport prefetch of every dynamic portal page overloaded the dev
+ * server in earlier versions; disabling all prefetch made navigation slow.
+ * This preserves client-side Next navigation and a responsive app shell.
+ */
+function Link({ prefetch: _ignored, onMouseEnter, onFocus, ...props }: ComponentProps<typeof NextLink>) {
+  const [intent, setIntent] = useState(false);
+  return <NextLink {...props} prefetch={intent ? null : false}
+    onMouseEnter={event => { setIntent(true); onMouseEnter?.(event); }}
+    onFocus={event => { setIntent(true); onFocus?.(event); }} />;
+}
 
 type NavItem = {
   href: string;
@@ -186,6 +201,9 @@ export default function SiteNav({
     try {
       const response = await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
       if (!response.ok) throw new Error('Unable to sign out. Please try again.');
+      // In-memory private snapshots must never survive a change of identity.
+      invalidateQuerySnapshots();
+      closeLiveEvents();
       setMobileOpen(false);
       setMoreOpen(false);
       // Staff always return to staff login; clients return to the public site.

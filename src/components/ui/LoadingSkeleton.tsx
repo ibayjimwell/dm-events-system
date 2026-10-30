@@ -57,12 +57,19 @@ export function DetailSkeleton({ label = 'Loading booking details' }: { label?: 
 }
 
 export function RouteSkeleton() {
+  // Next.js keeps shared portal layouts mounted during client navigation.
+  // Only the destination section is replaced while server authorization runs.
   return (
-    <main className="page-wrap page-space" role="status" aria-label="Opening section" aria-busy="true">
-      <div className={`${bar} mb-4 h-9 w-60 max-w-full`} />
-      <div className={`${bar} mb-6 h-4 w-80 max-w-full`} />
-      <StatSkeleton />
-      <div className="mt-6"><DetailSkeleton label="Opening section" /></div>
+    <main className="page-wrap page-space" role="status" aria-label="Opening workspace section" aria-busy="true">
+      <div className="mx-auto w-full max-w-6xl animate-pulse space-y-5" aria-hidden="true">
+        <div className="h-7 w-44 rounded-lg bg-slate-200/70" />
+        <div className="h-3 w-64 max-w-full rounded bg-slate-100" />
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[0, 1, 2].map(i => <div key={i} className="h-24 rounded-2xl border border-slate-100 bg-slate-100/70" />)}
+        </div>
+        <div className="h-48 rounded-2xl border border-slate-100 bg-slate-100/50" />
+      </div>
+      <span className="sr-only">Opening section without reloading the navigation</span>
     </main>
   );
 }

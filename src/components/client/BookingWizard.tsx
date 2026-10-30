@@ -263,8 +263,9 @@ export default function BookingWizard() {
         inspirationAssetId: form.inspirationAssetId || null,
         consent: true,
       }));
+      // The submitted screen reads the new booking directly; avoid a second
+      // Router Server Component refresh after navigation.
       router.replace(`/client/bookings/submitted?id=${encodeURIComponent(result.booking.id)}`);
-      router.refresh();
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : 'Your request could not be submitted.';
       if (/date.*(held|confirmed|unavailable)|already.*(held|confirmed)|choose an available date/i.test(message)) {

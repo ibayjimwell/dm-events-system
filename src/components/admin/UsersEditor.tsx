@@ -37,7 +37,7 @@ const panel = 'min-w-0 rounded-xl border border-[#dae4ed] bg-white p-4 shadow-sm
 const isEmployee = (user: User) => user.role === 'COORDINATOR' || user.role === 'ADMIN';
 
 export default function UsersEditor() {
-  const { data, error, refresh, loading } = useLiveQuery(() => api<{ users: User[] }>('/api/users'), []);
+  const { data, error, refresh, loading } = useLiveQuery(() => api<{ users: User[] }>('/api/users'), [],{cacheKey:'admin:/api/users',realtimeKinds:['users','user_module_permissions']});
   const users = data?.users ?? [];
   const employees = useMemo(() => users.filter(isEmployee), [data?.users]);
 

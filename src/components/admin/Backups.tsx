@@ -9,7 +9,7 @@ import { ListSkeleton } from '@/components/ui/LoadingSkeleton';
 type Backup={id:string;createdAt:string;status:string;sizeBytes:number|null;storageKey:string|null;error:string|null};
 
 export default function Backups() {
-  const {data,error,refresh,loading}=useLiveQuery(()=>api<{logs:Backup[];configured:boolean}>('/api/backups'),[]);
+  const {data,error,refresh,loading}=useLiveQuery(()=>api<{logs:Backup[];configured:boolean}>('/api/backups'),[],{cacheKey:'admin:/api/backups',realtimeKinds:['backup_logs']});
   const [busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[noticeError,setNoticeError]=useState(false);
   async function run() {
     if (!window.confirm('Create an encrypted backup of the current database and upload it to the configured off-site storage?')) return;

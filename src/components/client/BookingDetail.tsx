@@ -140,7 +140,7 @@ function Section({ icon, eyebrow, title, description, children, action }: {
 }
 
 export default function BookingDetail({ id }: { id: string }) {
-  const { data, error, loading, refresh } = useLiveQuery(() => api<{ booking: Detail }>(`/api/bookings/${id}`), [id]);
+  const { data, error, loading, refresh } = useLiveQuery(() => api<{ booking: Detail }>(`/api/bookings/${id}`), [id],{cacheKey:`client:/api/bookings/${id}`,realtimeKinds:['bookings','booking_history']});
   const booking = data?.booking;
   const [cancelReason, setCancelReason] = useState('');
   const [showCancellation, setShowCancellation] = useState(false);

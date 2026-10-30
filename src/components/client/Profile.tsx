@@ -13,7 +13,7 @@ import { normalizePhoneNumber, type PhoneCountry } from '@/lib/validators';
 type User = { fullName: string; email: string; phone: string | null; role: string };
 
 export default function Profile() {
-  const { data, refresh, loading, error } = useLiveQuery(() => api<{ user: User }>('/api/auth/me'), []);
+  const { data, refresh, loading, error } = useLiveQuery(() => api<{ user: User }>('/api/auth/me'), [],{cacheKey:'client:/api/auth/me',realtimeKinds:['users']});
   const user = data?.user;
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');

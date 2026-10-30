@@ -16,7 +16,8 @@ test('client navigation preserves App Router layouts and server authentication b
   }
   assert.match(src('src/components/shared/PortalMessengerFrame.tsx'), /<SiteNav role=\{role\}/);
   assert.match(src('src/components/shared/SiteNav.tsx'), /from 'next\/link'/);
-  assert.match(src('app/layout.tsx'), /GlobalNetworkSkeleton/);
+  assert.doesNotMatch(src('app/layout.tsx'), /GlobalNetworkSkeleton/);
+  assert.match(src('src/components/ui/GlobalNetworkSkeleton.tsx'), /return null/);
   assert.match(src('app/(portal)/loading.tsx'), /RouteSkeleton/);
   assert.match(src('app/(public)/loading.tsx'), /RouteSkeleton/);
 });

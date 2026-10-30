@@ -12,7 +12,7 @@ type Item = { id: string; reference: string; clientName: string; eventType: stri
 const statuses = ['ALL', 'TENTATIVE', 'HELD', 'CONFIRMED', 'CANCELLED'] as const;
 
 export default function RequestList({ role, canCreateWalkIn = false }: { role: 'COORDINATOR' | 'ADMIN'; canCreateWalkIn?: boolean }) {
-  const { data, loading, error, refresh } = useLiveQuery(() => api<{ bookings: Item[] }>('/api/bookings'), []);
+  const { data, loading, error, refresh } = useLiveQuery(() => api<{ bookings: Item[] }>('/api/bookings'), [],{cacheKey:'staff:/api/bookings',realtimeKinds:['bookings','booking_history']});
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('ALL');
   const [source, setSource] = useState('ALL');

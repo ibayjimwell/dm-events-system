@@ -15,7 +15,7 @@ const isoManila = () => new Intl.DateTimeFormat('en-CA',{ timeZone:'Asia/Manila'
 export default function Calendar({ role = 'COORDINATOR' }: { role?: 'COORDINATOR'|'ADMIN' }) {
   const [month, setMonth] = useState(() => isoManila().slice(0,7));
   const [chosen, setChosen] = useState('');
-  const { data, error, loading } = useLiveQuery(() => api<{ bookings:Event[] }>(`/api/calendar?month=${month}`), [month]);
+  const { data, error, loading } = useLiveQuery(() => api<{ bookings:Event[] }>(`/api/calendar?month=${month}`), [month],{cacheKey:`staff:/api/calendar?month=${month}`,realtimeKinds:['bookings']});
   const [year, index] = month.split('-').map(Number);
   const today = isoManila();
   const selected = chosen || (month === today.slice(0,7) ? today : `${month}-01`);

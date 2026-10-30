@@ -10,7 +10,7 @@ import { DetailSkeleton } from '@/components/ui/LoadingSkeleton';
 type Settings={backupsEnabled:boolean;retentionDays:number;backupFrequencyHours:24};
 
 export default function BackupSettings({canBackups=true}:{canBackups?:boolean}) {
-  const {data,loading,error}=useLiveQuery(()=>api<{settings:Settings}>('/api/settings'),[]);
+  const {data,loading,error}=useLiveQuery(()=>api<{settings:Settings}>('/api/settings'),[],{cacheKey:'admin:/api/settings',realtimeKinds:['system_settings']});
   const [enabled,setEnabled]=useState(false),[retention,setRetention]=useState(30),[notice,setNotice]=useState(''),[noticeError,setNoticeError]=useState(false),[busy,setBusy]=useState(false);
   useEffect(()=>{if(data?.settings){setEnabled(data.settings.backupsEnabled);setRetention(data.settings.retentionDays);}},[data]);
   async function save(event:FormEvent<HTMLFormElement>) {

@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { can } from "@/lib/access";
 import { notificationOutbox, bookings } from "@/db/schema";
 import { notificationRows } from "@/lib/notifications/enqueue";
@@ -89,14 +90,18 @@ export const POST = route(async (req) => {
     }
     return [newMessage];
   });
-  // Email/SMS is best-effort after the durable message has been committed.
-  // A gateway failure must never cause a duplicate message on client retry.
-  try { await audit(u.id, "MESSAGE_SENT", "booking", v.bookingId); }
-  catch (error) { console.error('Message audit failed', error); }
-  if (u.role === "COORDINATOR") {
-    try { await tryImmediateDelivery(v.bookingId); }
-    catch (error) { console.error('Message notification delivery deferred', error); }
-  }
+  // The message is durable at this point. Do not make the chat wait for
+  // audit I/O, SMTP, SMS, or a temporarily unavailable notification gateway.
+  // Next.js `after` runs after the HTTP response; queued notifications remain
+  // available to the existing cron worker if immediate delivery fails.
+  after(async () => {
+    try { await audit(u.id, "MESSAGE_SENT", "booking", v.bookingId); }
+    catch (error) { console.error('Message audit failed', error); }
+    if (u.role === "COORDINATOR") {
+      try { await tryImmediateDelivery(v.bookingId); }
+      catch (error) { console.error('Message notification delivery deferred', error); }
+    }
+  });
   return ok({ message: m }, 201);
 });
 export const PATCH = route(async (req) => {

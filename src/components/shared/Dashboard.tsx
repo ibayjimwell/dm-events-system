@@ -15,7 +15,7 @@ type Role = 'CLIENT'|'COORDINATOR'|'ADMIN';
 type QuickAction = {label:string;detail:string;href:string;permission?:Permission;Icon:typeof CalendarDays};
 
 export default function Dashboard({role,permissions=[]}:{role:Role;permissions?:Permission[]}) {
-  const {data,loading,error,refresh} = useLiveQuery(()=>api<Summary>('/api/summary'),[]);
+  const {data,loading,error,refresh} = useLiveQuery(()=>api<Summary>('/api/summary'),[],{cacheKey:`${role}:/api/summary`,realtimeKinds:['bookings','booking_history','messages','message_reads','booking_value_events']});
   const isClient = role==='CLIENT',isAdmin=role==='ADMIN';
   const title = isClient?'Your events, thoughtfully organized':isAdmin?'Your operations at a glance':'Your event coordination hub';
   const caption = isClient?'Follow each request, keep in touch with DM Events and plan what comes next.':isAdmin?'Monitor confirmed commitments, current inquiries and the next operational actions.':'Stay on top of incoming requests, scheduled dates and client communication.';
