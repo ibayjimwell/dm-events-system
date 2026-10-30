@@ -6,9 +6,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import {
   ArrowRight, BarChart3, CalendarDays, CalendarPlus,
-  ChevronDown, ChevronRight, ClipboardList, FolderKanban,
+  ChevronDown, ChevronRight, ClipboardList, DatabaseBackup, FolderKanban,
   Home, LayoutDashboard, LogIn, LogOut, Menu, MessageCircle,
-  Package, Settings2, ShieldCheck, UserRound, UsersRound, WalletCards,
+  Package, Settings2, ShieldCheck, UserRound, UsersRound,
   X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -66,11 +66,12 @@ const adminLinks: NavItem[] = [
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3, permission: 'analytics.view' },
   { href: '/admin/calendar', label: 'Schedule', icon: CalendarDays, permission: 'calendar.view' },
   { href: '/admin/bookings', label: 'Bookings', icon: ClipboardList, permission: 'bookings.view.all' },
+  { href: '/admin/maintenance/backups', label: 'Backups', icon: DatabaseBackup, permission: 'backups.manage' },
 ];
 const maintenanceLinks: NavItem[] = [
   { href: '/admin/maintenance/packages', label: 'Manage Packages', icon: Package, permission: 'packages.manage' },
   { href: '/admin/maintenance/content', label: 'Website Content', icon: FolderKanban, permission: 'content.manage' },
-  { href: '/admin/maintenance/backups', label: 'Backups', icon: WalletCards, permission: 'backups.manage' },
+  { href: '/admin/maintenance/backups', label: 'R2 Backup Center', icon: DatabaseBackup, permission: 'backups.manage' },
   { href: '/admin/maintenance/settings', label: 'System Settings', icon: Settings2, permission: 'settings.manage' },
   { href: '/admin/maintenance/notifications', label: 'Email & SMS Notifications', icon: MessageCircle, permission: 'settings.manage' },
   { href: '/admin/maintenance/users', label: 'User Access', icon: UsersRound, permission: 'users.manage' },
@@ -125,7 +126,7 @@ export default function SiteNav({
   const groups: NavGroup[] = role === 'PUBLIC' || role === 'CLIENT' ? [] : role === 'ADMIN'
     ? [
         { label: 'Booking tools', items: visible([{ href: '/admin/walk-in', label: 'New Walk-in Booking', icon: CalendarPlus, permission: 'bookings.create.walkin' }]) },
-        { label: 'Website & administration', items: visible(maintenanceLinks) },
+        { label: 'Website & administration', items: visible(maintenanceLinks.filter(item => item.href !== '/admin/maintenance/backups')) },
         { label: 'Operations', items: visible(extraOperationsLinks) },
       ]
     : [

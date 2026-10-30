@@ -1,8 +1,20 @@
 import { HttpError } from '@/lib/http';
 
 const identifier = /^[a-zA-Z0-9_.-]+$/;
+const runnerVariables = [
+  'BACKUP_GITHUB_TOKEN',
+  'BACKUP_GITHUB_OWNER',
+  'BACKUP_GITHUB_REPO',
+  'BACKUP_GITHUB_REF',
+] as const;
+
+/** Returns only environment variable NAMES, never the corresponding secrets. */
+export function backupDispatchMissing(): string[] {
+  return runnerVariables.filter(name => !process.env[name]?.trim());
+}
+
 export function backupDispatchConfigured() {
-  return Boolean(process.env.BACKUP_GITHUB_TOKEN && process.env.BACKUP_GITHUB_OWNER && process.env.BACKUP_GITHUB_REPO && process.env.BACKUP_GITHUB_REF);
+  return backupDispatchMissing().length === 0;
 }
 
 /** Initiates a private GitHub Actions runner. 204 means queued, NOT that a backup succeeded. */
