@@ -24,7 +24,7 @@ export default function Overview({permissions=[]}:{permissions?:Permission[]}) {
     {label:'Website content',detail:'Edit public homepage sections',href:'/admin/maintenance/content',p:'content.manage',Icon:Globe},
     {label:'Packages',detail:'Manage visible event packages',href:'/admin/maintenance/packages',p:'packages.manage',Icon:Package},
     {label:'Accounts & access',detail:'Assign employee permissions',href:'/admin/maintenance/users',p:'users.manage',Icon:UsersRound},
-    {label:'Backup history',detail:'Review off-site backup activity',href:'/admin/maintenance/backups',p:'backups.manage',Icon:Database},
+    {label:'Backup history',detail:'Review off-site backup activity',href:'/admin/maintenance/settings?tab=backups',p:'backups.manage',Icon:Database},
   ].filter(action=>permissions.includes(action.p as Permission));
   return <main className="page-wrap page-space workspace">
     <section className="workspace-hero"><div className="workspace-hero__top"><div><span className="workspace-kicker"><ShieldCheck size={14}/> ADMINISTRATOR WORKSPACE</span><h1>Business operations overview</h1><p>See confirmed commitments, incoming requests and the modules available to your account.</p></div>{permissions.includes('bookings.view.all')&&<div className="workspace-hero__actions"><Link href="/admin/bookings" className="btn"><ClipboardList size={16}/> Open bookings</Link></div>}</div></section>

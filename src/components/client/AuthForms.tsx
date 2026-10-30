@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
-import { api, json } from '@/api-client/http';
+import { ApiError, api, json } from '@/api-client/http';
 import {
   PHONE_COUNTRIES,
   PASSWORD_RULE,
@@ -23,12 +23,20 @@ type RegistrationErrors = Partial<Record<RegistrationField, string>>;
 
 const DRAFT_KEY = 'dm-events-registration-draft-v1';
 const BOOKING_INTENT_KEY = 'dm-events-pending-booking-v1';
+// UI-only progress hint. The backend verifies OTPs and controls account access.
+const VERIFICATION_STATE_KEY = 'dm-events-pending-otp-progress-v1';
+type OtpProgress = { email: string; emailVerified: boolean; phoneVerified: boolean };
+function rememberOtpProgress(progress: OtpProgress) {
+  try { sessionStorage.setItem(VERIFICATION_STATE_KEY, JSON.stringify(progress)); }
+  catch { /* Optional browser storage. */ }
+}
+
 const TITLES: Record<Mode, string> = {
   login: 'WELCOME BACK',
   register: 'CREATE AN ACCOUNT',
   forgot: 'FORGOT PASSWORD',
   reset: 'RESET PASSWORD',
-  verify: 'VERIFY YOUR EMAIL',
+  verify: 'VERIFY YOUR ACCOUNT',
 };
 
 export default function AuthForms({ mode }: { mode: Mode }) {
@@ -42,6 +50,11 @@ export default function AuthForms({ mode }: { mode: Mode }) {
   const [country, setCountry] = useState<PhoneCountry>('PH');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [otpEmail, setOtpEmail] = useState(query.get('email') ?? '');
+  const [emailCode, setEmailCode] = useState('');
+  const [phoneCode, setPhoneCode] = useState('');
+  const [verifiedChannels, setVerifiedChannels] = useState({EMAIL:false,PHONE:false});
   const [showPassword, setShowPassword] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [consent, setConsent] = useState(false);
@@ -50,6 +63,33 @@ export default function AuthForms({ mode }: { mode: Mode }) {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const verificationEmailFromUrl = query.get('email');
+  const isVerificationComplete = query.get('verified') === '1';
+  const legacyVerificationToken = query.get('token');
+
+  // Signup and password-correct pending login both navigate here automatically.
+  // Restore only visual progress for the same email; never use it for authorization.
+  useEffect(() => {
+    if (mode !== 'verify' || legacyVerificationToken) return;
+    const normalized = (verificationEmailFromUrl ?? '').trim().toLowerCase();
+    if (!normalized) return;
+    setOtpEmail(normalized);
+    setVerifiedChannels({ EMAIL: false, PHONE: false });
+    try {
+      const saved = sessionStorage.getItem(VERIFICATION_STATE_KEY);
+      if (!saved) return;
+      const progress = JSON.parse(saved) as Partial<OtpProgress>;
+      if (progress.email === normalized) {
+        setVerifiedChannels({ EMAIL: progress.emailVerified === true, PHONE: progress.phoneVerified === true });
+      }
+    } catch { /* Storage may be disabled or empty. */ }
+  }, [mode, verificationEmailFromUrl, legacyVerificationToken]);
+
+  useEffect(() => {
+    if (mode !== 'login' || !isVerificationComplete) return;
+    if (verificationEmailFromUrl) setEmail(verificationEmailFromUrl);
+    setMessage('Your email and phone are verified. Log in to continue.');
+  }, [mode, isVerificationComplete, verificationEmailFromUrl]);
 
   // Carry package intent across Login → Register → Login, including email verification.
   // Store only a validated internal booking URL, never an arbitrary redirect.
@@ -150,6 +190,10 @@ export default function AuthForms({ mode }: { mode: Mode }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
+    if (mode === 'verify' && !legacyVerificationToken) {
+      await verifyOtp(verifiedChannels.EMAIL ? 'PHONE' : 'EMAIL');
+      return;
+    }
 
     let registrationPayload:
       | { fullName: string; email: string; phone: string; password: string; consent: true }
@@ -182,6 +226,7 @@ export default function AuthForms({ mode }: { mode: Mode }) {
       };
     }
 
+    if (mode === 'reset' && confirmPassword !== password) { setError('Passwords do not match.'); return; }
     if (mode === 'reset' && !newPassword.safeParse(password).success) {
       markTouched('password');
       return;
@@ -208,7 +253,7 @@ export default function AuthForms({ mode }: { mode: Mode }) {
         router.replace(destination);
         router.refresh();
       } else if (mode === 'register') {
-        const result = await api<{ verificationRequired: boolean }>(
+        const result = await api<{ verificationRequired: boolean; email:string; sent:{email:boolean;phone:boolean} }>(
           '/api/auth/register',
           json('POST', registrationPayload!)
         );
@@ -223,7 +268,8 @@ export default function AuthForms({ mode }: { mode: Mode }) {
         setTouched({});
 
         if (result.verificationRequired) {
-          setMessage('Please check your email for your verification link.');
+          rememberOtpProgress({ email: result.email.toLowerCase(), emailVerified: false, phoneVerified: false });
+          router.replace(`/verify-email?email=${encodeURIComponent(result.email)}`);
         } else {
           try { sessionStorage.removeItem(BOOKING_INTENT_KEY); } catch { /* Storage optional. */ }
           router.replace(next ?? pendingBooking ?? '/client');
@@ -235,17 +281,68 @@ export default function AuthForms({ mode }: { mode: Mode }) {
       } else if (mode === 'reset') {
         await api('/api/auth/reset', json('POST', { token: query.get('token'), password }));
         setPassword('');
+        setConfirmPassword('');
         setShowPassword(false);
         setMessage('Password changed. You can now log in.');
-      } else if (mode === 'verify') {
+      } else if (mode === 'verify' && query.get('token')) {
         await api('/api/auth/verify', json('POST', { token: query.get('token') }));
         setMessage('Email verified. Log in to continue.');
       }
     } catch (caught) {
+      if (mode === 'login' && caught instanceof ApiError &&
+          caught.status === 403 && caught.code === 'ACCOUNT_VERIFICATION_REQUIRED') {
+        const pendingEmail = caught.details?.email;
+        if (pendingEmail) {
+          rememberOtpProgress({
+            email: pendingEmail.toLowerCase(),
+            emailVerified: caught.details?.emailVerified === true,
+            phoneVerified: caught.details?.phoneVerified === true,
+          });
+          setPassword('');
+          router.replace(`/verify-email?email=${encodeURIComponent(pendingEmail)}`);
+          return;
+        }
+      }
       setError(caught instanceof Error ? caught.message : 'Action failed.');
     } finally {
       setBusy(false);
     }
+  }
+
+  async function verifyOtp(channel: 'EMAIL'|'PHONE') {
+    if (busy) return;
+    setError(''); setMessage('');
+    const code = channel === 'EMAIL' ? emailCode : phoneCode;
+    if (!/^\d{6}$/.test(code)) {setError('Enter the six-digit verification code.');return;}
+    setBusy(true);
+    try {
+      const result = await api<{completed:boolean,emailVerified:boolean,phoneVerified:boolean}>(
+        '/api/auth/verify',json('POST',{email:otpEmail.trim().toLowerCase(),channel,code}));
+      setVerifiedChannels({EMAIL:result.emailVerified,PHONE:result.phoneVerified});
+      if (channel==='EMAIL') setEmailCode(''); else setPhoneCode('');
+      const normalizedEmail = otpEmail.trim().toLowerCase();
+      if (result.completed) {
+        try { sessionStorage.removeItem(VERIFICATION_STATE_KEY); }
+        catch { /* Optional storage. */ }
+        // OTP verification activates the account; it never signs the user in
+        // without their password. Show confirmation on the normal login page.
+        router.replace(`/login?verified=1&email=${encodeURIComponent(normalizedEmail)}`);
+        return;
+      }
+      rememberOtpProgress({ email: normalizedEmail, emailVerified: result.emailVerified, phoneVerified: result.phoneVerified });
+      setMessage(`${channel === 'EMAIL' ? 'Email' : 'Phone'} verified. Complete the other verification to activate your account.`);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not verify code.'); }
+    finally { setBusy(false); }
+  }
+
+  async function resendOtp(channel: 'EMAIL'|'PHONE') {
+    if (busy) return;
+    setBusy(true); setError(''); setMessage('');
+    try {
+      await api('/api/auth/resend-verification',json('POST',{email:otpEmail.trim().toLowerCase(),channel}));
+      setMessage(`If verification is pending, a new ${channel === 'EMAIL' ? 'email' : 'SMS'} code has been requested.`);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Unable to resend code.'); }
+    finally { setBusy(false); }
   }
 
   return (
@@ -274,7 +371,7 @@ export default function AuthForms({ mode }: { mode: Mode }) {
                 ? 'Receive a secure password reset link'
                 : mode === 'reset'
                   ? 'Choose a new password'
-                  : 'Confirm ownership of your email address'}
+                  : query.get('token') ? 'Confirm ownership of your email address' : 'Verify your email and phone to activate your account'}
         </p>
 
         {mode === 'register' && (
@@ -430,6 +527,44 @@ export default function AuthForms({ mode }: { mode: Mode }) {
           </div>
         )}
 
+        {mode === 'reset' && (
+          <div className="field">
+            <label htmlFor="confirm-password">Confirm new password</label>
+            <input id="confirm-password" type="password" autoComplete="new-password" required
+              value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} minLength={12}
+              maxLength={128} placeholder="Repeat your new password" />
+            {confirmPassword && confirmPassword !== password && (
+              <p className={styles.errorText} role="alert">Passwords do not match.</p>
+            )}
+          </div>
+        )}
+
+        {mode === 'verify' && !query.get('token') && (
+          <div className="space-y-4 rounded-xl border border-white/20 bg-white/10 p-4">
+            <div className="field"><label htmlFor="otp-email">Registration email</label>
+              <input id="otp-email" type="email" required autoComplete="email" value={otpEmail}
+                onChange={e => {
+                  setOtpEmail(e.target.value);
+                  setVerifiedChannels({ EMAIL: false, PHONE: false });
+                }} placeholder="name@example.com" /></div>
+            {(['EMAIL','PHONE'] as const).map(channel => (
+              <div className="field" key={channel}>
+                <label htmlFor={`${channel}-otp`}>{channel === 'EMAIL' ? 'Email' : 'SMS'} verification code {verifiedChannels[channel] ? '✓ Verified' : ''}</label>
+                <input id={`${channel}-otp`} type="text" inputMode="numeric" autoComplete="one-time-code"
+                  maxLength={6} pattern="[0-9]{6}" value={channel === 'EMAIL' ? emailCode : phoneCode}
+                  onChange={e => { const code=e.target.value.replace(/\D/g,'').slice(0,6); if (channel==='EMAIL') setEmailCode(code); else setPhoneCode(code); }}
+                  placeholder="6-digit code" disabled={busy || verifiedChannels[channel]}/><div className="mt-2 flex flex-wrap gap-2">
+                  <button type="button" className="rounded-lg bg-[#0b4d98] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    disabled={busy || verifiedChannels[channel] || !otpEmail.trim()} onClick={() => void verifyOtp(channel)}>Verify {channel === 'EMAIL' ? 'email' : 'phone'}</button>
+                  <button type="button" className="rounded-lg border border-[#dce4ef] px-3 py-2 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-50"
+                    disabled={busy || verifiedChannels[channel] || !otpEmail.trim()} onClick={() => void resendOtp(channel)}>Resend code</button>
+                </div>
+              </div>
+            ))}
+            <p className="text-xs text-white/80">Both codes expire after 10 minutes. Check your email inbox and the SMS number entered at registration.</p>
+          </div>
+        )}
+
         {mode === 'register' && (
           <>
             <label className={styles.privacyRow}>
@@ -457,9 +592,9 @@ export default function AuthForms({ mode }: { mode: Mode }) {
         {error && <div role="alert" className="error">{error}</div>}
         {message && <div role="status" className="success">{message}</div>}
 
-        <button
+        {(mode !== 'verify' || !!query.get('token')) && <button
           className="btn"
-          disabled={busy || (mode === 'verify' && !query.get('token')) ||
+          disabled={busy ||
             (mode === 'reset' && !query.get('token'))}
         >
           {busy
@@ -471,7 +606,7 @@ export default function AuthForms({ mode }: { mode: Mode }) {
                 reset: 'UPDATE PASSWORD',
                 verify: 'VERIFY EMAIL',
               } as Record<Mode, string>)[mode]}
-        </button>
+        </button>}
 
         <div className="auth-links">
           {mode === 'login' ? (

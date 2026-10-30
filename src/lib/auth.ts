@@ -7,7 +7,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { HttpError } from './http';
 export type Role='CLIENT'|'COORDINATOR'|'ADMIN';
-export type Actor={id:string;email:string;fullName:string;phone:string|null;role:Role;isActive:boolean;emailVerifiedAt:Date|null};
+export type Actor={id:string;email:string;fullName:string;phone:string|null;role:Role;isActive:boolean;emailVerifiedAt:Date|null;phoneVerifiedAt:Date|null;signupVerificationRequired:boolean};
 const cookieName='dm_session';
 export const digest=(v:string)=>createHash('sha256').update(v).digest('hex');
 const randomToken=()=>randomBytes(32).toString('base64url');
@@ -16,13 +16,14 @@ export async function comparePassword(plain:string,hash:string){return bcrypt.co
 export const actor = cache(async ():Promise<Actor|null> => {
  const token=(await cookies()).get(cookieName)?.value;
  if(!token)return null;
- const rows=await db.select({id:users.id,email:users.email,fullName:users.fullName,phone:users.phone,role:users.role,isActive:users.isActive,emailVerifiedAt:users.emailVerifiedAt}).from(sessions).innerJoin(users,eq(sessions.userId,users.id)).where(and(eq(sessions.tokenHash,digest(token)),gt(sessions.expiresAt,new Date()))).limit(1);
+ const rows=await db.select({id:users.id,email:users.email,fullName:users.fullName,phone:users.phone,role:users.role,isActive:users.isActive,emailVerifiedAt:users.emailVerifiedAt,phoneVerifiedAt:users.phoneVerifiedAt,signupVerificationRequired:users.signupVerificationRequired}).from(sessions).innerJoin(users,eq(sessions.userId,users.id)).where(and(eq(sessions.tokenHash,digest(token)),gt(sessions.expiresAt,new Date()))).limit(1);
  if(!rows.length || !rows[0].isActive)return null;
  return rows[0];
 });
 export async function requireActor(...roles:Role[]):Promise<Actor> {
  const user=await actor();if(!user)throw new HttpError(401,'Please log in');
  if(roles.length && !roles.includes(user.role))throw new HttpError(403,'Not authorized for this action');
+ if(user.role==='CLIENT'&&user.signupVerificationRequired&&(!user.emailVerifiedAt||!user.phoneVerifiedAt))throw new HttpError(403,'Verify both your email and phone to continue');
  if(process.env.EMAIL_VERIFICATION_REQUIRED==='true'&&!user.emailVerifiedAt)throw new HttpError(403,'Verify your email address to continue');
  return user;
 }

@@ -17,6 +17,7 @@ import CountryPhoneInput from '@/components/ui/CountryPhoneInput';
 import { InlineSkeleton } from '@/components/ui/LoadingSkeleton';
 import { normalizePhoneNumber, type PhoneCountry } from '@/lib/validators';
 import styles from './BookingWizard.module.css';
+import { BookingSuccessCard } from '@/components/ui/BookingFeedback';
 
 type PublicPackage = {
   id: string;
@@ -68,7 +69,10 @@ function todayInManila() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 }
 
-export default function BookingWizard() {
+export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'COORDINATOR' } = {}) {
+  const isWalkIn = !!walkInRole;
+  const listBase = walkInRole === 'ADMIN' ? '/admin/bookings' : '/coordinator/requests';
+  const [completed, setCompleted] = useState<{id:string;reference:string}|null>(null);
   const router = useRouter();
   const search = useSearchParams();
   const requestedPackageId = search.get('package') ?? '';
@@ -78,7 +82,7 @@ export default function BookingWizard() {
   const [packages, setPackages] = useState<PublicPackage[] | null>(null);
   const [packageError, setPackageError] = useState('');
   const [packageRefresh, setPackageRefresh] = useState(0);
-  const [profileStatus, setProfileStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [profileStatus, setProfileStatus] = useState<'loading' | 'ready' | 'error'>(walkInRole ? 'ready' : 'loading');
   const [country, setCountry] = useState<PhoneCountry>('PH');
   const [photoName, setPhotoName] = useState('');
   const [showStyling, setShowStyling] = useState(false);
@@ -119,6 +123,7 @@ export default function BookingWizard() {
 
   // Populate the contact card from the authenticated account, not from URL params.
   useEffect(() => {
+    if (isWalkIn) return; // Walk-in clients have no portal account; staff enters their details.
     const controller = new AbortController();
     void api<{ user: ClientProfile | null }>('/api/auth/me', { signal: controller.signal })
       .then(result => {
@@ -142,7 +147,7 @@ export default function BookingWizard() {
       })
       .catch(() => { if (!controller.signal.aborted) setProfileStatus('error'); });
     return () => controller.abort();
-  }, []);
+  }, [isWalkIn]);
 
   const selectedPackage = packages?.find(pkg => pkg.id === form.packageId);
   const eventType = form.eventType === 'Other' ? customEventType.trim() : form.eventType;
@@ -200,7 +205,7 @@ export default function BookingWizard() {
       if (form.contactName.trim().length < 2 || form.contactName.length > 180) {
         setError('Enter your full contact name.'); return;
       }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contactEmail)) {
+      if ((!isWalkIn || form.contactEmail.trim()) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contactEmail)) {
         setError('Enter a valid email address.'); return;
       }
       if (!normalizedPhone) {
@@ -210,7 +215,7 @@ export default function BookingWizard() {
     }
   // `move` is intentionally a UI-only action; the latest form values drive each check.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busy, step, packages, form, eventType, profileStatus, normalizedPhone]);
+  }, [busy, step, packages, form, eventType, profileStatus, normalizedPhone, isWalkIn]);
 
   async function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -236,7 +241,7 @@ export default function BookingWizard() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (step !== 5 || busy || submitting.current || !consent) return;
-    if (!normalizedPhone || form.contactName.trim().length < 2 || !form.contactEmail.trim()) {
+    if (!normalizedPhone || form.contactName.trim().length < 2 || (!isWalkIn && !form.contactEmail.trim())) {
       setError('Please check your contact details before submitting.'); return;
     }
     if (!packages || (form.packageId && !packages.some(pkg => pkg.id === form.packageId))) {
@@ -252,7 +257,7 @@ export default function BookingWizard() {
     setError('');
     try {
       await assertAvailableDate(form.eventDate);
-      const result = await api<{ booking: { id: string } }>('/api/bookings', json('POST', {
+      const result = await api<{ booking: { id: string; reference: string } }>(isWalkIn ? '/api/bookings/walk-in' : '/api/bookings', json('POST', {
         ...form,
         eventType,
         venue: form.venue.trim(),
@@ -265,7 +270,11 @@ export default function BookingWizard() {
       }));
       // The submitted screen reads the new booking directly; avoid a second
       // Router Server Component refresh after navigation.
-      router.replace(`/client/bookings/submitted?id=${encodeURIComponent(result.booking.id)}`);
+      if (isWalkIn) {
+        setCompleted({ id: result.booking.id, reference: result.booking.reference });
+      } else {
+        router.replace(`/client/bookings/submitted?id=${encodeURIComponent(result.booking.id)}`);
+      }
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : 'Your request could not be submitted.';
       if (/date.*(held|confirmed|unavailable)|already.*(held|confirmed)|choose an available date/i.test(message)) {
@@ -283,14 +292,23 @@ export default function BookingWizard() {
     }
   }
 
+  if (completed && isWalkIn) return (
+    <main className={styles.page}><div className={styles.shell}>
+      <BookingSuccessCard reference={completed.reference} title="Walk-in inquiry recorded"
+        message="The inquiry is Tentative. No client account was created. Staff will coordinate directly using the supplied contact details."
+        viewHref={`${listBase}/${completed.id}`}
+        onNew={() => {setCompleted(null);setStep(1);setForm({...initialValues});setCountry('PH');setConsent(false);setPhotoName('');submitting.current=false;}} />
+    </div></main>
+  );
+
   return (
     <main className={styles.page}>
       <div className={styles.shell}>
         <div className={styles.hero}>
           <div>
-            <span className={styles.eyebrow}><Sparkles size={14} /> YOUR EVENT, BEAUTIFULLY PLANNED</span>
-            <h1>Let’s plan something <em>memorable.</em></h1>
-            <p>Five simple steps to tell DM Events about the celebration you have in mind.</p>
+            <span className={styles.eyebrow}><Sparkles size={14} /> {isWalkIn ? 'STAFF · WALK-IN INQUIRY' : 'YOUR EVENT, BEAUTIFULLY PLANNED'}</span>
+            <h1>{isWalkIn ? <>Plan a walk-in <em>celebration.</em></> : <>Let’s plan something <em>memorable.</em></>}</h1>
+            <p>{isWalkIn ? 'Same five-step booking experience as the client portal, with staff recording the customer’s consent.' : 'Five simple steps to tell DM Events about the celebration you have in mind.'}</p>
           </div>
           <div className={styles.heroAside} aria-hidden="true"><CalendarDays size={33} /><span>01 — 05</span><small>YOUR EVENT JOURNEY</small></div>
         </div>
@@ -324,7 +342,7 @@ export default function BookingWizard() {
                 'Browse our published packages and choose the one that fits. You can also decide later.',
                 'Check real-time availability and choose a date that works for you.',
                 'A few details will help our team prepare the right quotation and plan.',
-                'We have filled these details from your account. Review and edit them if needed.',
+                isWalkIn ? 'Enter the walk-in customer’s contact information. Email is optional, but phone is required.' : 'We have filled these details from your account. Review and edit them if needed.',
                 'Check every detail before sending your inquiry. Nothing is booked until our team confirms it.',
               ][step - 1]}</p>
             </div>
@@ -418,14 +436,14 @@ export default function BookingWizard() {
 
               {step === 4 && (
                 <div className={styles.contactArea}>
-                  {profileStatus === 'loading' && <InlineSkeleton rows={3} label="Loading account contact information" />}
-                  {profileStatus === 'error' && <div className={styles.infoNote}>Account details could not be loaded automatically. Please verify your contact information manually.</div>}
+                  {!isWalkIn && profileStatus === 'loading' && <InlineSkeleton rows={3} label="Loading account contact information" />}
+                  {!isWalkIn && profileStatus === 'error' && <div className={styles.infoNote}>Account details could not be loaded automatically. Please verify your contact information manually.</div>}
                   <div className={styles.detailForm}>
                     <div className={styles.field}><label htmlFor="booking-contact-name">Full name <span>*</span></label><input id="booking-contact-name" className={inputClass} autoComplete="name" value={form.contactName} onChange={e => set('contactName', e.target.value)} maxLength={180} required placeholder="Full name" /></div>
-                    <div className={styles.field}><label htmlFor="booking-contact-email">Email address <span>*</span></label><input id="booking-contact-email" className={inputClass} type="email" autoComplete="email" value={form.contactEmail} onChange={e => set('contactEmail', e.target.value)} maxLength={320} required placeholder="you@example.com" /></div>
+                    <div className={styles.field}><label htmlFor="booking-contact-email">Email address {isWalkIn ? <em>(optional)</em> : <span>*</span>}</label><input id="booking-contact-email" className={inputClass} type="email" autoComplete="email" value={form.contactEmail} onChange={e => set('contactEmail', e.target.value)} maxLength={320} required={!isWalkIn} placeholder="you@example.com" /></div>
                     <div className={styles.fieldFull}><CountryPhoneInput id="booking-contact-phone" label="Contact number" country={country} number={form.contactPhone} onCountryChange={setCountry} onNumberChange={value => set('contactPhone', value)} hint="We use this number to discuss your booking details." /></div>
                   </div>
-                  <div className={styles.infoNote}><UserRound size={18}/><span>These details were prefilled from your client account. Editing them here only changes the contact details for this request.</span></div>
+                  <div className={styles.infoNote}><UserRound size={18}/><span>{isWalkIn ? 'Record the walk-in customer’s contact information. No client portal account is created.' : 'These details were prefilled from your client account. Editing them here only changes the contact details for this request.'}</span></div>
                 </div>
               )}
 
@@ -451,7 +469,7 @@ export default function BookingWizard() {
                     <ShieldCheck size={22}/>
                     <div><strong>A request is not a confirmed reservation.</strong><p>DM Events will review your date and details, then contact you about availability and a personalized quotation.</p></div>
                   </div>
-                  <label className={styles.privacy}><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} required /><span>I have reviewed my details, acknowledge the <Link href="/privacy" target="_blank">Privacy Policy</Link>, and understand that this is a tentative request.</span></label>
+                  <label className={styles.privacy}><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} required /><span>{isWalkIn ? 'I have explained the Privacy Policy to the walk-in customer, obtained their acknowledgment, and recorded consent here. This remains a tentative inquiry.' : <>I have reviewed my details, acknowledge the <Link href="/privacy" target="_blank">Privacy Policy</Link>, and understand that this is a tentative request.</>}</span></label>
                 </div>
               )}
             </div>
@@ -461,12 +479,12 @@ export default function BookingWizard() {
             <div className={styles.actionButtons}>
               {step > 1 && <button type="button" disabled={busy} className={styles.secondaryButton} onClick={() => move((step - 1) as Step)}><ChevronLeft size={18} /> Back</button>}
               {step < 5 ? <button type="button" disabled={busy || (step === 1 && packages === null)} className={styles.primaryButton} onClick={() => void continueStep()}>{busy ? 'Checking…' : 'Continue'} <ChevronRight size={18} /></button>
-                : <button type="submit" disabled={busy || !consent} className={styles.primaryButton}>{busy ? 'Submitting…' : 'Confirm & submit request'} <CheckCircle2 size={18}/></button>}
+                : <button type="submit" disabled={busy || !consent} className={styles.primaryButton}>{busy ? 'Submitting…' : isWalkIn ? 'Record walk-in inquiry' : 'Confirm & submit request'} <CheckCircle2 size={18}/></button>}
             </div>
           </div>
-          <p className={styles.securityFoot}><ShieldCheck size={15}/> Secure client inquiry · We only use your information to plan and coordinate your event.</p>
+          <p className={styles.securityFoot}><ShieldCheck size={15}/> {isWalkIn ? 'Authorized staff inquiry · Client consent recorded · No client portal account' : 'Secure client inquiry · We only use your information to plan and coordinate your event.'}</p>
         </form>
-        <div className={styles.help}><p>Have questions about the process?</p><Link href="/packages">Explore all packages <ArrowRight size={15}/></Link></div>
+        <div className={styles.help}><p>{isWalkIn ? 'Need to return to the booking list?' : 'Have questions about the process?'}</p><Link href={isWalkIn ? listBase : '/packages'}>{isWalkIn ? 'Return to bookings' : 'Explore all packages'} <ArrowRight size={15}/></Link></div>
       </div>
     </main>
   );

@@ -8,6 +8,8 @@ const get = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8
 
 const changes = [
   'app/(portal)/admin/maintenance/backups/page.tsx',
+  'app/(portal)/admin/maintenance/settings/page.tsx',
+  'src/components/admin/SettingsHub.tsx',
   'app/(portal)/admin/maintenance/page.tsx',
   'src/components/admin/Backups.tsx',
   'src/components/admin/BackupSettings.tsx',
@@ -27,25 +29,41 @@ test('every changed TypeScript and TSX file parses', () => {
   }
 });
 
-test('backup page exists and has server permission guard', () => {
+test('old Backups route redirects to the existing System Settings page', () => {
   const source = get('app/(portal)/admin/maintenance/backups/page.tsx');
-  assert.match(source, /pagePermission\('backups\.manage'\)/);
-  assert.match(source, /<Backups\s*\/>/);
+  assert.match(source, /redirect\('\/admin\/maintenance\/settings\?tab=backups'\)/);
+  const config = get('next.config.ts');
+  assert.match(config, /source: '\/admin\/maintenance\/backups'/);
+  assert.match(config, /destination: '\/admin\/maintenance\/settings\?tab=backups'/);
 });
 
-test('Administrator sees Backups in main navbar; Coordinator modules are permission-filtered', () => {
+test('Backups is in More, not the Administrator main navbar', () => {
   const source = get('src/components/shared/SiteNav.tsx');
-  assert.match(source, /label: 'Backups', icon: DatabaseBackup, permission: 'backups\.manage'/);
-  assert.match(source, /adminLinks: NavItem\[\]/);
-  assert.match(source, /visible\(\[\.\.\.extraAdminLinks, \.\.\.maintenanceLinks\]\)/);
+  const mainNav = source.slice(source.indexOf('const adminLinks:'), source.indexOf('const maintenanceLinks:'));
+  assert.doesNotMatch(mainNav, /Backups|backups\.manage/);
+  assert.match(source, /label: 'Cloudflare R2 Backups', icon: DatabaseBackup, permission: 'backups\.manage'/);
+  assert.match(source, /items: visible\(maintenanceLinks\)/);
   assert.match(source, /allowed\.has\(item\.permission\)/);
 });
 
-test('Maintenance landing offers a prominent backup access link', () => {
-  const source = get('app/(portal)/admin/maintenance/page.tsx');
-  assert.match(source, /BACKUP CENTER/);
-  assert.match(source, /Open R2 Backup Center/);
-  assert.match(source, /allowed\.has\('backups\.manage'\)/);
+test('System Settings page renders secure embedded tabs', () => {
+  const page = get('app/(portal)/admin/maintenance/settings/page.tsx');
+  const hub = get('src/components/admin/SettingsHub.tsx');
+  assert.match(page, /permissionSet\(user\)/);
+  assert.match(page, /canSettings = permissions\.has\('settings\.manage'\)/);
+  assert.match(page, /canBackups = permissions\.has\('backups\.manage'\)/);
+  assert.match(page, /<SettingsHub/);
+  assert.match(hub, /role="tablist"/);
+  assert.match(hub, /<Backups canSettings=\{canSettings\}/);
+  assert.match(hub, /window\.history\.pushState/);
+});
+
+test('Maintenance and overview point to Settings Backups tab, not legacy URL', () => {
+  for (const file of ['app/(portal)/admin/maintenance/page.tsx','src/components/admin/Overview.tsx','src/components/admin/BackupSettings.tsx']) {
+    const source = get(file);
+    assert.match(source, /\/admin\/maintenance\/settings\?tab=backups/);
+    assert.doesNotMatch(source, /href=["']\/admin\/maintenance\/backups/);
+  }
 });
 
 test('backup page visibly renders queue control, diagnostics, and statuses', () => {

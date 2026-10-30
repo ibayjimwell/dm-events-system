@@ -96,11 +96,11 @@ test('both booking APIs use server-side reservation validation', () => {
 });
 
 test('both forms use the shared date picker and repeat date availability check', () => {
-  for (const name of ['src/components/client/BookingWizard.tsx', 'src/components/shared/WalkInBooking.tsx']) {
-    const content = fs.readFileSync(path.join(root, name), 'utf8');
-    assert.match(content, /<AvailableDatePicker/);
-    assert.ok((content.match(/await assertAvailableDate\(/g) || []).length >= 2);
-  }
+  const wizard = fs.readFileSync(path.join(root, 'src/components/client/BookingWizard.tsx'),'utf8');
+  assert.match(wizard, /<AvailableDatePicker/);
+  assert.ok((wizard.match(/await assertAvailableDate\(/g) || []).length >= 2);
+  const walkIn = fs.readFileSync(path.join(root, 'src/components/shared/WalkInBooking.tsx'),'utf8');
+  assert.match(walkIn, /BookingWizard walkInRole=\{role\}/);
   const content = fs.readFileSync(path.join(root, 'src/components/ui/AvailableDatePicker.tsx'), 'utf8');
   assert.match(content, /disabled=\{unavailable\}/);
   assert.match(content, /\?month=/);

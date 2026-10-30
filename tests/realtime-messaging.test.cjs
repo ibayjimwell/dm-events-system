@@ -81,7 +81,8 @@ test('inbox, mobile chat, attachments, realtime refresh and original read-only o
 
 test('migration journal includes new migration in sequence and no existing event data is dropped', () => {
   const journal = JSON.parse(source('drizzle/meta/_journal.json'));
-  assert.equal(journal.entries.at(-1).tag, '0007_realtime_chat_presence');
+  assert.ok(journal.entries.some(entry => entry.tag === '0007_realtime_chat_presence'));
+  assert.equal(journal.entries.at(-1).tag, '0008_client_dual_otp');
   const sql = source('drizzle/0007_realtime_chat_presence.sql');
   assert.match(sql, /CREATE TABLE IF NOT EXISTS public\.message_typing/);
   assert.doesNotMatch(sql, /DROP TABLE|TRUNCATE|DELETE FROM/i);

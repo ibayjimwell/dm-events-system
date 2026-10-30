@@ -66,12 +66,11 @@ const adminLinks: NavItem[] = [
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3, permission: 'analytics.view' },
   { href: '/admin/calendar', label: 'Schedule', icon: CalendarDays, permission: 'calendar.view' },
   { href: '/admin/bookings', label: 'Bookings', icon: ClipboardList, permission: 'bookings.view.all' },
-  { href: '/admin/maintenance/backups', label: 'Backups', icon: DatabaseBackup, permission: 'backups.manage' },
 ];
 const maintenanceLinks: NavItem[] = [
   { href: '/admin/maintenance/packages', label: 'Manage Packages', icon: Package, permission: 'packages.manage' },
   { href: '/admin/maintenance/content', label: 'Website Content', icon: FolderKanban, permission: 'content.manage' },
-  { href: '/admin/maintenance/backups', label: 'R2 Backup Center', icon: DatabaseBackup, permission: 'backups.manage' },
+  { href: '/admin/maintenance/settings?tab=backups', label: 'Cloudflare R2 Backups', icon: DatabaseBackup, permission: 'backups.manage' },
   { href: '/admin/maintenance/settings', label: 'System Settings', icon: Settings2, permission: 'settings.manage' },
   { href: '/admin/maintenance/notifications', label: 'Email & SMS Notifications', icon: MessageCircle, permission: 'settings.manage' },
   { href: '/admin/maintenance/users', label: 'User Access', icon: UsersRound, permission: 'users.manage' },
@@ -90,9 +89,14 @@ const extraOperationsLinks: NavItem[] = [
 
 const dashboardRoots = new Set(['/admin', '/coordinator', '/client']);
 const matches = (pathname: string, href: string): boolean => {
-  if (pathname === href) return true;
-  if (href === '/' || dashboardRoots.has(href)) return false;
-  return pathname.startsWith(`${href}/`);
+  // More-menu tabs use query strings while usePathname() deliberately excludes them.
+  // A query-tab entry shares its pathname with System Settings; only the
+  // canonical pathname entry receives aria-current to avoid two active links.
+  if (href.includes('?')) return false;
+  const path = href.split('?')[0].split('#')[0];
+  if (pathname === path) return true;
+  if (path === '/' || dashboardRoots.has(path)) return false;
+  return pathname.startsWith(`${path}/`);
 };
 
 const authPaths = new Set(['/login', '/register', '/forgot-password', '/reset-password', '/verify-email']);
@@ -126,7 +130,7 @@ export default function SiteNav({
   const groups: NavGroup[] = role === 'PUBLIC' || role === 'CLIENT' ? [] : role === 'ADMIN'
     ? [
         { label: 'Booking tools', items: visible([{ href: '/admin/walk-in', label: 'New Walk-in Booking', icon: CalendarPlus, permission: 'bookings.create.walkin' }]) },
-        { label: 'Website & administration', items: visible(maintenanceLinks.filter(item => item.href !== '/admin/maintenance/backups')) },
+        { label: 'Website & administration', items: visible(maintenanceLinks) },
         { label: 'Operations', items: visible(extraOperationsLinks) },
       ]
     : [

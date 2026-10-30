@@ -58,7 +58,8 @@ test('client preference changes are previewed before mutation', () => {
 });
 
 test('walk-in and booking security/API modules are not replaced', () => {
-  assert.match(src('src/components/shared/WalkInBooking.tsx'), /\/api\/bookings\/walk-in/);
+  assert.match(src('src/components/shared/WalkInBooking.tsx'), /BookingWizard walkInRole=\{role\}/);
+  assert.match(src('src/components/client/BookingWizard.tsx'), /\/api\/bookings\/walk-in/);
   assert.match(src('src/components/ui/AvailableDatePicker.tsx'), /\/api\/bookings\/availability/);
   assert.match(src('src/components/ui/BookingChangeDialog.tsx'), /aria-labelledby/);
 });

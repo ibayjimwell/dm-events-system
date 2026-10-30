@@ -89,8 +89,10 @@ test('success feedback keeps booking view, messaging and walk-in follow-up desti
   assert.match(submitted, /readBooking\(id, user\)/);
   assert.match(submitted, /BookingSuccessCard/);
   assert.match(submitted, /messageHref=\{`\/client\/messages\?booking=/);
-  assert.match(walkin, /BookingSuccessCard/);
-  assert.match(walkin, /viewHref=\{`\$\{base\}\/\$\{completed\.id\}`\}/);
+  assert.match(walkin, /BookingWizard walkInRole=\{role\}/);
+  const wizard = source('src/components/client/BookingWizard.tsx');
+  assert.match(wizard, /BookingSuccessCard/);
+  assert.match(wizard, /viewHref=\{`\$\{listBase\}\/\$\{completed\.id\}`\}/);
   assert.match(feedback, /<BookingStatus value=\{status\}/);
 });
 

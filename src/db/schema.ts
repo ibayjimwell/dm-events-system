@@ -50,6 +50,8 @@ export const users = pgTable(
     role: roles("role").notNull().default("CLIENT"),
     isActive: boolean("is_active").notNull().default(true),
     emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+    phoneVerifiedAt: timestamp("phone_verified_at", { withTimezone: true }),
+    signupVerificationRequired: boolean("signup_verification_required").notNull().default(false),
     ...timestamps(),
   },
   (t) => [

@@ -25,7 +25,7 @@ test('all role menus remain permission-filtered, including delegated modules', (
 });
 
 test('active navigation does not highlight root dashboard and More together', () => {
-  assert.match(nav, /dashboardRoots\.has\(href\)/);
+  assert.match(nav, /dashboardRoots\.has\(path\)/);
   assert.match(nav, /const settingsActive = !primaryActive/);
   assert.match(nav, /aria-current=\{active \? 'page'/);
 });

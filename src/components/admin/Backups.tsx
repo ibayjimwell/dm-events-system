@@ -67,7 +67,7 @@ const requiredVariables = [
 ];
 
 /** Backups are executed by GitHub Actions, never from the browser or a Vercel request. */
-export default function Backups() {
+export default function Backups({ canSettings = false }: { canSettings?: boolean }) {
   const { data, error, refresh, loading } = useLiveQuery(
     () => api<BackupsResponse>('/api/backups'),
     [],
@@ -225,7 +225,7 @@ export default function Backups() {
               <div className="flex items-center justify-between gap-3"><span>Automatic policy</span><strong>{data?.settings?.backupsEnabled ? 'Enabled' : 'Disabled'}</strong></div>
               <div className="flex items-center justify-between gap-3"><span>Retention policy</span><strong>{data?.settings?.retentionDays ?? '—'} days</strong></div>
             </div>
-            <Link href="/admin/maintenance/settings" className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#0b4d98] hover:underline">Manage system settings <ArrowRight size={16} /></Link>
+            {canSettings && <Link href="/admin/maintenance/settings?tab=policy" className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#0b4d98] hover:underline">Manage system settings <ArrowRight size={16} /></Link>}
             <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noopener noreferrer" className="mt-3 flex items-center gap-2 text-sm font-semibold text-[#0b4d98] hover:underline">GitHub token settings <ExternalLink size={14} /></a>
           </section>
           <div className="workspace-banner"><ShieldCheck size={18} className="shrink-0" /><span>Private R2 objects are encrypted with AES-256-GCM. Never expose the bucket publicly or commit encryption keys.</span></div>
