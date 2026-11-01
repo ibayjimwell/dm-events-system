@@ -1,7 +1,7 @@
 /* Scoped public marketing + admin content-preview design. Portal UI remains untouched. */
 .dm-marketing { --dm-ink: #112943; --dm-navy: #09243d; --dm-gold: #cba56c; --dm-cream: #f8f5ee; color: var(--dm-ink); background: #fbfaf7; font-family: Inter, Arial, sans-serif; overflow: clip; }
 .dm-marketing__container { width: min(1180px, calc(100% - 48px)); margin-inline: auto; }
-.dm-marketing h1, .dm-marketing h2, .dm-marketing h3 { font-family: Georgia, Cambria, 'Times New Roman', serif; font-weight: 500; letter-spacing: -.035em; line-height: 1.09; overflow-wrap: anywhere; }
+.dm-marketing h1, .dm-marketing h2, .dm-marketing h3 { font-family: Inter, Arial, sans-serif; font-weight: 500; letter-spacing: -.035em; line-height: 1.09; overflow-wrap: anywhere; }
 .dm-marketing p { line-height: 1.77; }
 .dm-eyebrow { display: flex; align-items: center; gap: 11px; color: #8b6a42; font-size: 11px; font-weight: 750; letter-spacing: .19em; text-transform: uppercase; line-height: 1.5 !important; overflow-wrap: anywhere; }
 .dm-eyebrow--light { color: #ecd6b6; }
@@ -28,7 +28,7 @@
 .dm-hero__bottom { display: flex; position: absolute; left: 0; right: 0; bottom: 28px; align-items: center; justify-content: space-between; z-index: 1; font-size: 10px; letter-spacing: .17em; color: #d8e0eb; }
 .dm-hero__bottom a { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; }
 .dm-introduction { display: grid; grid-template-columns: minmax(190px,.85fr) minmax(0,1.65fr); gap: 7%; padding-block: clamp(75px, 10vw, 144px); align-items: start; }
-.dm-introduction__ornament { display: block; color: #ceaf7d; font-family: Georgia,serif; font-size: 88px; line-height: 1.3; opacity: .7; }
+.dm-introduction__ornament { display: block; color: #ceaf7d; font-family: Inter, Arial, sans-serif; font-size: 88px; line-height: 1.3; opacity: .7; }
 .dm-introduction__main h2 { font-size: clamp(37px, 4.5vw, 64px); max-width: 800px; margin: 0 0 23px; }
 .dm-introduction__main > p { max-width: 690px; font-size: 16px; color: #536577; margin: 0 0 28px; }
 .dm-features { background: #f1ede5; padding: clamp(64px, 9vw, 113px) 0; }
@@ -38,7 +38,7 @@
 .dm-features__grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 18px; margin-top: 45px; }
 .dm-feature { position: relative; min-height: 265px; padding: 29px 28px 33px; background: #fffdfa; border: 1px solid #e8e0d4; }
 .dm-feature__icon { display: inline-grid; width: 56px; height: 56px; place-items: center; background: #f4eadd; color: #936b3d; border-radius: 50%; }
-.dm-feature__number { position: absolute; top: 32px; right: 27px; color: #b7ac9d; font-family: Georgia,serif; font-size: 20px; }
+.dm-feature__number { position: absolute; top: 32px; right: 27px; color: #b7ac9d; font-family: Inter, Arial, sans-serif; font-size: 20px; }
 .dm-feature h3 { font-size: 28px; margin: 28px 0 11px; }
 .dm-feature > p { margin: 0; color: #647284; font-size: 13px; }
 .dm-featured { padding-block: clamp(72px, 10vw, 122px); }
@@ -53,7 +53,7 @@
 .dm-showcase-card__fallback { width: 100%; height: 100%; display: grid; place-items: center; color: #f5e6ce; background: linear-gradient(135deg,#31516d,#102b45); }
 .dm-showcase-card__fallback--1 { background: linear-gradient(140deg,#a48e75,#4c5a60); }
 .dm-showcase-card__fallback--2 { background: linear-gradient(140deg,#2e616a,#112c44); }
-.dm-showcase-card__counter { position: absolute; bottom: 14px; left: 16px; background: #fbf8f3; color: #203a52; font-family: Georgia,serif; font-size: 15px; padding: 5px 10px; }
+.dm-showcase-card__counter { position: absolute; bottom: 14px; left: 16px; background: #fbf8f3; color: #203a52; font-family: Inter, Arial, sans-serif; font-size: 15px; padding: 5px 10px; }
 .dm-showcase-card__body { display: flex; flex-direction: column; flex: 1; padding: 27px; }
 .dm-mini-label { color: #a27a49; font-weight: 700; font-size: 10px; letter-spacing: .15em; margin: 0 0 9px; }
 .dm-showcase-card__body h3 { font-size: 31px; margin: 0 0 11px; }
@@ -73,7 +73,7 @@
 .dm-journey__note { font-size: 14px; color: #aebfd0; max-width: 340px; }
 .dm-journey__steps { border-top: 1px solid #ffffff26; }
 .dm-journey__step { display: grid; grid-template-columns: 42px 1fr 23px; gap: 18px; padding: 25px 0; border-bottom: 1px solid #ffffff26; align-items: start; }
-.dm-journey__index { font-family: Georgia,serif; font-size: 22px; color: #dfbc85; }
+.dm-journey__index { font-family: Inter, Arial, sans-serif; font-size: 22px; color: #dfbc85; }
 .dm-journey__step h3 { color: #fff; margin: 0 0 7px; font-size: 23px; }
 .dm-journey__step p { color: #b8c6d3; font-size: 13px; margin: 0; }
 .dm-journey__step > svg { color: #dfbc85; margin-top: 3px; }
@@ -191,7 +191,7 @@
 .dm-marketing--preview a { pointer-events: none; }
 .dm-public-footer { background: #091f35; color: #d9e4ee; padding: 60px 0 0; }
 .dm-public-footer__top { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; padding-bottom: 52px; }
-.dm-public-footer__brand { color: #fff; font-family: Georgia,serif; letter-spacing: .055em; font-size: 28px; text-decoration: none; }
+.dm-public-footer__brand { color: #fff; font-family: Inter, Arial, sans-serif; letter-spacing: .055em; font-size: 28px; text-decoration: none; }
 .dm-public-footer__brand span { color: #dbb77d; padding-left: 10px; }
 .dm-public-footer__top p { max-width: 350px; color: #adbfce; font-size: 12px; line-height: 1.85; margin: 20px 0; }
 .dm-public-footer__links { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; }

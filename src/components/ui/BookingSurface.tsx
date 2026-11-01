@@ -44,14 +44,14 @@ export function BookingHero({ eyebrow, title, description, actions, backHref, ba
   </header>;
 }
 
-export function BookingSummary({ items }: { items: { label: string; value: string | number; note?: string; icon?: ReactNode }[] }) {
+export function BookingSummary({ items }: { items: { label: string; value: string | number; note?: string; icon?: ReactNode; onClick?: () => void; active?: boolean }[] }) {
   return <div className={styles.summaryGrid}>
-    {items.map(item => <div className={styles.summary} key={item.label}>
+    {items.map(item => item.onClick ? <button type="button" onClick={item.onClick} aria-pressed={!!item.active} className={`${styles.summary} cursor-pointer text-left transition hover:border-blue-400 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-600 ${item.active?'ring-2 ring-blue-400':''}`} key={item.label}>
       {item.icon && <span className={styles.summaryIcon}>{item.icon}</span>}
       <span className={styles.summaryCaption}>{item.label}</span>
       <strong className={styles.summaryValue}>{item.value}</strong>
       {item.note && <span className={styles.summaryNote}>{item.note}</span>}
-    </div>)}
+    </button> : <div className={styles.summary} key={item.label}>{item.icon && <span className={styles.summaryIcon}>{item.icon}</span>}<span className={styles.summaryCaption}>{item.label}</span><strong className={styles.summaryValue}>{item.value}</strong>{item.note && <span className={styles.summaryNote}>{item.note}</span>}</div>)}
   </div>;
 }
 

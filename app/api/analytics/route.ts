@@ -18,7 +18,7 @@ export const GET = route(async () => {
       count: sql<number>`count(*) FILTER (WHERE ${bookingValueEvents.eventType} = 'CONFIRMATION')::int`,
     }).from(bookingValueEvents).groupBy(localMonth).orderBy(localMonth),
     db.select({
-      id: bookingValueEvents.id, reference: bookings.reference, eventType: bookings.eventType,
+      id: bookingValueEvents.id, bookingId: bookings.id, reference: bookings.reference, eventType: bookings.eventType,
       eventDate: bookings.eventDate, recordedAt: bookingValueEvents.recordedAt,
       movementType: bookingValueEvents.eventType, amountDelta: bookingValueEvents.amountDelta,
       valueAfter: bookingValueEvents.valueAfter, note: bookingValueEvents.note,

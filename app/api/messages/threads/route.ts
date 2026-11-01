@@ -1,7 +1,7 @@
 import { requireActor } from '@/lib/auth';
 import { can } from '@/lib/access';
 import { route, ok, HttpError } from '@/lib/http';
-import { readBookings } from '@/models/read';
+import { readMessageBookings } from '@/models/messaging';
 import { db } from '@/db';
 import { messages, messageReads } from '@/db/schema';
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
@@ -12,7 +12,7 @@ export const GET = route(async () => {
   if (!(await can(user, 'messages.own')) && !(await can(user, 'messages.staff'))) {
     throw new HttpError(403, 'Messaging is not permitted');
   }
-  const bookings = await readBookings(user);
+  const bookings = await readMessageBookings(user);
   if (!bookings.length) return ok({ threads: [], viewerId: user.id });
   const ids = bookings.map(b => b.id);
   const [latest, unread] = await Promise.all([

@@ -8,7 +8,8 @@ import { requireActor, audit, checkAuthLimit } from "@/lib/auth";
 import { db } from "@/db";
 import { messages, messageReads, mediaAssets, messageTyping, users } from "@/db/schema";
 import { eq, and, gt, ne } from "drizzle-orm";
-import { readBooking, readConversation } from "@/models/read";
+import { readConversation } from "@/models/read";
+import { requireMessageBooking } from "@/models/messaging";
 import { messageInput, messageReadInput } from "@/lib/validators";
 
 export const GET = route(async (req) => {
@@ -32,13 +33,10 @@ export const GET = route(async (req) => {
 
 export const POST = route(async (req) => {
   const u = await requireActor();
-  if (
-    u.role === "ADMIN" ||
-    (!(await can(u, "messages.staff")) && !(await can(u, "messages.own")))
-  )
+  if (!(await can(u, "messages.staff")) && !(await can(u, "messages.own")))
     throw new HttpError(403, "Sending messages not permitted");
   const v = messageInput.parse(await readJson(req));
-  await readBooking(v.bookingId, u);
+  await requireMessageBooking(v.bookingId, u);
   if (v.assetId) {
     const [a] = await db
       .select()
@@ -52,8 +50,8 @@ export const POST = route(async (req) => {
       );
     if (!a || a.bookingId) throw new HttpError(400, "Attachment unavailable");
   }
-  if (u.role === "COORDINATOR")
-    await checkAuthLimit("coordinator-messages:" + u.id, 30);
+  if (u.role !== "CLIENT")
+    await checkAuthLimit("staff-messages:" + u.id, 30);
   const [m] = await db.transaction(async (tx) => {
     const [newMessage] = await tx
       .insert(messages)
@@ -69,8 +67,8 @@ export const POST = route(async (req) => {
         .update(mediaAssets)
         .set({ bookingId: v.bookingId })
         .where(eq(mediaAssets.id, v.assetId));
-    // Only staff replies create client notifications, never a client's own message.
-    if (u.role === "COORDINATOR") {
+    // Notify clients for both administrator and coordinator replies, never for their own messages.
+    if (u.role !== "CLIENT") {
       const [b] = await tx
         .select()
         .from(bookings)
@@ -97,7 +95,7 @@ export const POST = route(async (req) => {
   after(async () => {
     try { await audit(u.id, "MESSAGE_SENT", "booking", v.bookingId); }
     catch (error) { console.error('Message audit failed', error); }
-    if (u.role === "COORDINATOR") {
+    if (u.role !== "CLIENT") {
       try { await tryImmediateDelivery(v.bookingId); }
       catch (error) { console.error('Message notification delivery deferred', error); }
     }
@@ -109,7 +107,7 @@ export const PATCH = route(async (req) => {
   if (!(await can(u, "messages.staff")) && !(await can(u, "messages.own")))
     throw new HttpError(403, "Messaging module not allowed");
   const { bookingId } = messageReadInput.parse(await readJson(req));
-  await readBooking(bookingId, u);
+  await requireMessageBooking(bookingId, u);
   await db
     .insert(messageReads)
     .values({ bookingId, userId: u.id, lastReadAt: new Date() })

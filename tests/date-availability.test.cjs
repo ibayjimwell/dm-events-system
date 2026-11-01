@@ -7,11 +7,11 @@ const ts = require('typescript');
 
 const root = path.resolve(__dirname, '..');
 const records = [
-  { eventDate: '2026-10-30', status: 'HELD' },
-  { eventDate: '2026-10-30', status: 'CONFIRMED' },
-  { eventDate: '2026-10-31', status: 'TENTATIVE' },
-  { eventDate: '2026-10-15', status: 'CANCELLED' },
-  { eventDate: '2026-11-02', status: 'HELD' },
+  { eventDate: '2027-10-30', status: 'HELD' },
+  { eventDate: '2027-10-30', status: 'CONFIRMED' },
+  { eventDate: '2027-10-31', status: 'TENTATIVE' },
+  { eventDate: '2027-10-15', status: 'CANCELLED' },
+  { eventDate: '2027-11-02', status: 'HELD' },
 ];
 
 const filterLib = {
@@ -63,30 +63,31 @@ const availability = loadServerAvailability();
 
 test('date validation rejects impossible dates and accepts leap day', () => {
   assert.equal(availability.isISODate('2028-02-29'), true);
-  assert.equal(availability.isISODate('2026-02-29'), false);
-  assert.equal(availability.isISODate('2026-13-01'), false);
-  assert.equal(availability.isISODate('2026-10-30'), true);
-  assert.equal(availability.isISOMonth('2026-10'), true);
-  assert.equal(availability.isISOMonth('2026-00'), false);
+  assert.equal(availability.isISODate('2027-02-29'), false);
+  assert.equal(availability.isISODate('2027-13-01'), false);
+  assert.equal(availability.isISODate('2027-10-30'), true);
+  assert.equal(availability.isISOMonth('2027-10'), true);
+  assert.equal(availability.isISOMonth('2027-00'), false);
 });
 
 test('only held and confirmed dates are blocked, duplicate legacy records do not leak data', async () => {
-  const dates = await availability.reservedDatesForMonth('2026-10');
+  const dates = await availability.reservedDatesForMonth('2027-10');
   assert.equal(dates.length, 1);
-  assert.equal(dates[0].date, '2026-10-30');
+  assert.equal(dates[0].date, '2027-10-30');
   assert.equal(dates[0].status, 'CONFIRMED');
   assert.deepEqual(Object.keys(dates[0]).sort(), ['date', 'status']);
 });
 
 test('month bounds exclude next-month reservations', async () => {
-  const dates = await availability.reservedDatesForMonth('2026-11');
+  const dates = await availability.reservedDatesForMonth('2027-11');
   assert.equal(dates.length, 1);
-  assert.equal(dates[0].date, '2026-11-02');
+  assert.equal(dates[0].date, '2027-11-02');
 });
 
 test('server rejects occupied date with 409, accepts a free date', async () => {
-  await assert.rejects(availability.requireAvailableBookingDate('2026-10-30'), (e) => e.status === 409);
-  await availability.requireAvailableBookingDate('2026-11-03');
+  const occupied='2027-10-30';
+  await assert.rejects(availability.requireAvailableBookingDate(occupied), (e) => e.status === 409);
+  await availability.requireAvailableBookingDate('2027-11-03');
 });
 
 test('both booking APIs use server-side reservation validation', () => {

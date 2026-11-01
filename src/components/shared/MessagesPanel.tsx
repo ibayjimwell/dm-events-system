@@ -56,7 +56,7 @@ async function signalTyping(bookingId: string, typing: boolean) {
   } catch { /* Typing is ephemeral; do not interrupt message composition. */ }
 }
 
-export default function MessagesPanel({ role }: { role: Role }) {
+export default function MessagesPanel({ role, canOpenBooking = true }: { role: Role; canOpenBooking?: boolean }) {
   const search = useSearchParams();
   const requestedBooking = search.get('booking') || '';
   const [selected, setSelected] = useState(requestedBooking);
@@ -73,7 +73,7 @@ export default function MessagesPanel({ role }: { role: Role }) {
   const [typedBy, setTypedBy] = useState<Record<string, number>>({});
   const [tick, setTick] = useState(Date.now());
   const [mobileThread, setMobileThread] = useState(!!requestedBooking);
-  const endRef = useRef<HTMLDivElement>(null);
+  const messageScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const typingPulseRef = useRef(0);
   const stopTypingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -170,7 +170,7 @@ export default function MessagesPanel({ role }: { role: Role }) {
   }, [all.refresh, conversation.refresh]);
 
   const markRead = useCallback(async () => {
-    if (!selected || !conversation.data || role === 'ADMIN' || document.visibilityState !== 'visible') return;
+    if (!selected || !conversation.data || document.visibilityState !== 'visible') return;
     const ownRead = conversation.data.reads.find(r => r.userId === viewerId)?.lastReadAt;
     const lastIncoming = [...conversation.data.messages].reverse().find(m => m.senderId !== viewerId);
     if (!lastIncoming || (ownRead && new Date(ownRead).getTime() >= new Date(lastIncoming.createdAt).getTime())) return;
@@ -199,11 +199,17 @@ export default function MessagesPanel({ role }: { role: Role }) {
   }, [markRead]);
 
   const lastMessageId = optimistic.filter(m => m.bookingId === selected).at(-1)?.id ?? conversation.data?.messages.at(-1)?.id;
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [selected, lastMessageId]);
+  // Scroll only inside chat, never the page: the composer remains visible.
+  useEffect(() => {
+    const element = messageScrollRef.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [selected, lastMessageId]);
 
-  const filtered = useMemo(() => threads.filter(t =>
-    [t.clientName, t.reference, t.eventType].some(value => value.toLowerCase().includes(searchTerm.toLowerCase()))
-  ), [threads, searchTerm]);
+  // Search only the client's name (not booking number, event type, or message body).
+  const filtered = useMemo(() => {
+    const name = searchTerm.trim().toLocaleLowerCase();
+    return threads.filter(thread => thread.clientName.toLocaleLowerCase().includes(name));
+  }, [threads, searchTerm]);
   const unreadTotal = threads.reduce((sum, t) => sum + t.unread, 0);
   const othersTyping = Object.entries(typedBy).some(([id, expiry]) => id !== viewerId && expiry > tick)
     || !!conversation.data?.typing.some(t => t.userId !== viewerId && typedBy[t.userId] === undefined && new Date(t.expiresAt).getTime() > tick);
@@ -217,7 +223,7 @@ export default function MessagesPanel({ role }: { role: Role }) {
 
   function changeDraft(value: string) {
     setDrafts(previous => ({ ...previous, [selected]: value }));
-    if (!selected || role === 'ADMIN') return;
+    if (!selected) return;
     if (!value.trim()) { void signalTyping(selected, false); return; }
     if (Date.now() - typingPulseRef.current >= 2300) {
       typingPulseRef.current = Date.now();
@@ -227,7 +233,7 @@ export default function MessagesPanel({ role }: { role: Role }) {
     stopTypingRef.current = setTimeout(() => { void signalTyping(selected, false); typingPulseRef.current = 0; }, 2900);
   }
   function switchThread(id: string) {
-    if (id !== selected && selected && role !== 'ADMIN' && text.trim()) void signalTyping(selected, false);
+    if (id !== selected && selected && text.trim()) void signalTyping(selected, false);
     setSelected(id); setMobileThread(true);
     setError('');
   }
@@ -248,7 +254,7 @@ export default function MessagesPanel({ role }: { role: Role }) {
   }
   async function send(event?: FormEvent) {
     event?.preventDefault();
-    if (!selected || sending || uploading || role === 'ADMIN' || (!text.trim() && !assetId)) return;
+    if (!selected || sending || uploading || (!text.trim() && !assetId)) return;
     const bookingId = selected;
     const body = text.trim();
     const attachmentId = assetId || null;
@@ -299,8 +305,7 @@ export default function MessagesPanel({ role }: { role: Role }) {
   }
   function wasSeen(message: Message) {
     if (!conversation.data || message.senderId !== viewerId) return false;
-    const recipientRole = role === 'CLIENT' ? 'COORDINATOR' : 'CLIENT';
-    return conversation.data.reads.some(read => read.role === recipientRole && read.userId !== viewerId
+    return conversation.data.reads.some(read => (role === 'CLIENT' ? read.role !== 'CLIENT' : read.role === 'CLIENT') && read.userId !== viewerId
       && new Date(read.lastReadAt).getTime() >= new Date(message.createdAt).getTime());
   }
   const messages = [...(conversation.data?.messages || []), ...optimistic.filter(m => m.bookingId === selected)];
@@ -317,7 +322,7 @@ export default function MessagesPanel({ role }: { role: Role }) {
             <h2>Inbox</h2>{unreadTotal > 0 && <span className={styles.totalCount}>{unreadTotal}</span>}
           </div>
           <p>Stay connected with every booking.</p>
-          <label className={styles.search}><Search size={18}/><input aria-label="Search conversations" placeholder="Search events or bookings" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/></label>
+          <label className={styles.search}><Search size={18}/><input aria-label="Search by client name" placeholder="Search client name" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/></label>
         </div>
         <div className={styles.threadList}>
           {all.loading && !all.data && <div className={styles.loadingPad}><ListSkeleton rows={4} label="Loading conversations"/></div>}
@@ -337,7 +342,7 @@ export default function MessagesPanel({ role }: { role: Role }) {
               {thread.unread > 0 && <span className={styles.unread} aria-label={`${thread.unread} unread messages`}>{thread.unread > 99 ? '99+' : thread.unread}</span>}
             </button>;
           })}
-          {!all.loading && !filtered.length && <div className={styles.emptyInbox}><MessageCircle size={30}/><strong>No conversations found</strong><p>{searchTerm ? 'Try searching by booking reference or event name.' : 'Your booking conversations will appear here.'}</p></div>}
+          {!all.loading && !filtered.length && <div className={styles.emptyInbox}><MessageCircle size={30}/><strong>No conversations found</strong><p>{searchTerm ? 'Try searching by client name.' : 'Your booking conversations will appear here.'}</p></div>}
         </div>
         <footer className={styles.sidebarFooter}><LockKeyhole size={15}/> Private, booking-linked messaging</footer>
       </aside>
@@ -349,13 +354,13 @@ export default function MessagesPanel({ role }: { role: Role }) {
             <div className={styles.chatHeading}><strong>{role === 'CLIENT' ? 'DM Events Team' : active.clientName}</strong>
               <span>{active.reference} <span className={styles.dot}>·</span> {active.eventType}</span></div>
             <span className={styles.status}>{active.status.toLowerCase()}</span>
-            <Link href={role === 'CLIENT' ? `/client/bookings/${active.id}` : role === 'ADMIN' ? `/admin/bookings/${active.id}` : `/coordinator/requests/${active.id}`}
+            {canOpenBooking && <Link href={role === 'CLIENT' ? `/client/bookings/${active.id}` : role === 'ADMIN' ? `/admin/bookings/${active.id}` : `/coordinator/requests/${active.id}`}
               className={styles.detailLink} aria-label="View booking details" title="View booking details">
               <CalendarDays size={18}/><span className={styles.detailText}>Booking</span>
-            </Link>
+            </Link>}
           </header>
           {active.source === 'WALK_IN' && <div className={styles.walkin}>Walk-in booking: these are internal staff notes, not messages delivered to the client.</div>}
-          <div className={styles.messageScroll} aria-live="polite" aria-label="Messages" role="log">
+          <div className={styles.messageScroll} ref={messageScrollRef} aria-live="polite" aria-label="Messages" role="log">
             {conversation.loading && !conversation.data && <div className={styles.loadingMessages}><ListSkeleton rows={4} label="Loading messages"/></div>}
             {conversation.error && <p role="alert" className={styles.inlineError}>{conversation.error}</p>}
             {!conversation.loading && !messages.length && <div className={styles.emptyConversation}><div className={styles.emptyArt}><MessageCircle size={34}/></div><h3>A conversation starts here</h3><p>Share questions, event details and updates in this secure space.</p></div>}
@@ -386,10 +391,9 @@ export default function MessagesPanel({ role }: { role: Role }) {
               </div>;
             })}
             {othersTyping && <div className={styles.typing}><span className={styles.typingDots}><i/><i/><i/></span><span>{role === 'CLIENT' ? 'DM Events is typing' : 'Someone is typing'}…</span></div>}
-            <div ref={endRef}/>
           </div>
           {error && <div className={styles.composeError} role="alert">{error}<button type="button" aria-label="Dismiss error" onClick={() => setError('')}><X size={15}/></button></div>}
-          {role !== 'ADMIN' ? <form className={styles.composer} onSubmit={send}>
+          <form className={styles.composer} onSubmit={send}>
             {assetId && <div className={styles.uploadChip}><ImagePlus size={16}/><span>{fileLabel || 'Attached photo'}</span><button type="button" onClick={() => { setAssetId(''); setFileLabel(''); }} aria-label="Remove attached photo"><X size={16}/></button></div>}
             <div className={styles.composeRow}>
               <label className={styles.attach} title="Attach an event photo"><Paperclip size={21}/><span className="sr-only">Attach photo</span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadFile} disabled={uploading || sending} hidden/></label>
@@ -397,7 +401,7 @@ export default function MessagesPanel({ role }: { role: Role }) {
               <button type="submit" className={styles.sendButton} disabled={sending || uploading || (!text.trim() && !assetId)} aria-label={sending ? 'Sending message' : 'Send message'}><Send size={19}/></button>
             </div>
             <div className={styles.composeHint}><span>{uploading ? 'Uploading photo…' : sending ? 'Sending securely…' : 'Enter to send · Shift + Enter for a new line'}</span><span>{text.length}/3000</span></div>
-          </form> : <div className={styles.readOnly}><LockKeyhole size={16}/> Administrator oversight is read-only.</div>}
+          </form>
         </> : <div className={styles.selectConversation}><MessageCircle size={40}/><h3>Select a conversation</h3><p>Choose an event booking to view its messages.</p></div>}
       </section>
     </div>

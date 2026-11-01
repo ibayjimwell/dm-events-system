@@ -148,7 +148,9 @@ export const bookingInput = z.object({
   guestCount: z.coerce.number().int().min(1).max(100000),
   // Venue may be unknown when requesting a quotation; never require a location upfront.
   venue: z.string().trim().max(2000).default(''),
-  estimatedBudget: z.string().trim().min(1).max(200),
+  venueLatitude: z.number().finite().min(-90).max(90).nullable().optional(),
+  venueLongitude: z.number().finite().min(-180).max(180).nullable().optional(),
+  estimatedBudget: z.string().trim().regex(/^(?:0|[1-9]\d{0,8})(?:\.\d{1,2})?$/, 'Enter a PHP amount using numbers only, with up to two decimal places.').refine(value => Number(value) > 0, 'Estimated budget must be greater than zero.'),
   packageId: z.string().uuid().nullable().optional(),
   preferredTheme: z.string().max(400).default(''),
   colorPalette: z.string().max(400).default(''),
@@ -183,6 +185,7 @@ export const packageInput = z.object({
   description: z.string().trim().min(2).max(3000),
   inclusions: z.array(z.string().trim().min(1).max(240)).max(50),
   imageId: z.string().uuid().nullable().optional(),
+  imageIds: z.array(z.string().uuid()).max(10,'Select no more than ten images per package.').default([]),
   published: z.boolean(),
   sortOrder: z.number().int().min(0).max(1000),
 });

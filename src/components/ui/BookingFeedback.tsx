@@ -26,7 +26,7 @@ export function BookingSavedDialog({ open, reference, changes, onContinue, canRe
         <CheckCircle2 size={43} className="text-[#eace94] motion-safe:animate-[bounce_700ms_ease-out_1]" strokeWidth={1.5}/>
       </div>
       <span className="relative text-[10px] font-bold uppercase tracking-[.22em] text-[#e4ca9b]">Update completed</span>
-      <h2 id="booking-saved-title" className="relative !mt-3 !font-serif !text-3xl !font-normal !text-white">Changes saved</h2>
+      <h2 id="booking-saved-title" className="relative !mt-3 !font-sans !text-3xl !font-normal !text-white">Changes saved</h2>
       <p id="booking-saved-description" className="relative mt-2 text-sm leading-6 text-[#d6e3eb]">Your updates to booking <strong className="text-white">{reference}</strong> have been saved successfully.</p>
     </div>
     <div className="px-6 pb-7 pt-6 sm:px-8">
@@ -50,7 +50,7 @@ export function BookingSuccessCard({ reference, title, message, viewHref, messag
         <CheckCircle2 size={48} strokeWidth={1.5} className="text-[#f0d59c] motion-safe:animate-[bounce_750ms_ease-out_1]"/>
       </div>
       <span className="relative inline-flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[.2em] text-[#eacb93]"><Sparkles size={14}/> Request received</span>
-      <h1 className="relative mt-4 font-serif text-[clamp(28px,4vw,42px)] font-normal leading-tight text-white">{title}</h1>
+      <h1 className="relative mt-4 font-sans text-[clamp(28px,4vw,42px)] font-normal leading-tight text-white">{title}</h1>
       <p className="relative mx-auto mt-3 max-w-xl text-sm leading-7 text-[#d3e1ea]">{message}</p>
     </div>
     <div className="px-6 py-8 sm:px-10">

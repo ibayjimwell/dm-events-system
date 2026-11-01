@@ -66,6 +66,7 @@ const adminLinks: NavItem[] = [
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3, permission: 'analytics.view' },
   { href: '/admin/calendar', label: 'Schedule', icon: CalendarDays, permission: 'calendar.view' },
   { href: '/admin/bookings', label: 'Bookings', icon: ClipboardList, permission: 'bookings.view.all' },
+  { href: '/admin/messages', label: 'Messages', icon: MessageCircle, permission: 'messages.staff' },
 ];
 const maintenanceLinks: NavItem[] = [
   { href: '/admin/maintenance/packages', label: 'Manage Packages', icon: Package, permission: 'packages.manage' },

@@ -43,7 +43,7 @@ test('homepage sections are persisted in an additive SQL migration', () => {
   const journal = JSON.parse(read('drizzle/meta/_journal.json'));
   assert.ok(journal.entries.some(entry => entry.tag === '0006_public_homepage_content')); // New migrations can follow the CMS migration.
   assert.ok(journal.entries.some(entry => entry.tag === '0007_realtime_chat_presence'));
-  assert.equal(journal.entries.at(-1).tag, '0008_client_dual_otp');
+  assert.equal(journal.entries.at(-1).tag, '0009_package_image_gallery');
 });
 
 test('website content remains draft/publish gated and never exposes drafts to public users', () => {

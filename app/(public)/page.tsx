@@ -16,7 +16,7 @@ export default async function Home() {
 
   const [site, featured] = await Promise.all([
     currentSite(),
-    db.select({ id: packages.id, name: packages.name, description: packages.description, inclusions: packages.inclusions, imageId: packages.imageId })
+    db.select({ id: packages.id, name: packages.name, description: packages.description, inclusions: packages.inclusions, imageId: packages.imageId, imageIds: packages.imageIds })
       .from(packages).where(eq(packages.published, true)).orderBy(asc(packages.sortOrder), asc(packages.name)).limit(3),
   ]);
   return <HomeShowcase

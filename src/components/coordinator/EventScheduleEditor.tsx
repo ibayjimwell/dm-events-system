@@ -12,8 +12,8 @@ type Schedule = {
   assignedCoordinatorId: string | null; scheduleNotes: string;
 };
 type Coordinator = { id: string; name: string };
-export default function EventScheduleEditor({ booking, canEdit, onSaved }: {
-  booking: Schedule; canEdit: boolean; onSaved: () => Promise<void>;
+export default function EventScheduleEditor({ booking, canEdit, onSaved, onDirtyChange }: {
+  booking: Schedule; canEdit: boolean; onSaved: () => Promise<void>; onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [staff, setStaff] = useState<Coordinator[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
@@ -47,6 +47,10 @@ export default function EventScheduleEditor({ booking, canEdit, onSaved }: {
     return result;
   // Staff display names change only when directory loads; changes are recomputed on render.
   }, [start, end, assigned, notes, booking, staff]);
+  useEffect(() => {
+    onDirtyChange?.(canEdit && changes.length > 0);
+  },[canEdit,changes.length,onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false),[onDirtyChange]);
   function preview(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); setError(''); setSuccess('');
     if (!!start !== !!end || (start && end && start >= end)) {

@@ -11,10 +11,11 @@ import { money, niceDate } from '@/components/ui/Blocks';
 import BookingChangeDialog, { type BookingChange } from '@/components/ui/BookingChangeDialog';
 import { BookingSavedDialog } from '@/components/ui/BookingFeedback';
 import EventScheduleEditor from '@/components/coordinator/EventScheduleEditor';
+import useUnsavedChangesGuard from '@/hooks/useUnsavedChangesGuard';
 import { BookingHero, BookingStatus, BookingPanel, BookingInfoGrid, BookingTimeline, bookingStyles as s } from '@/components/ui/BookingSurface';
 
 type Detail = {
-  id: string; reference: string; eventType: string; eventDate: string; venue: string; guestCount: number;
+  id: string; reference: string; eventType: string; eventDate: string; venue: string; venueLatitude?: number | null; venueLongitude?: number | null; guestCount: number;
   estimatedBudget: string; preferredTheme: string; colorPalette: string; specialRequests: string;
   inspirationAssetId: string | null; status: 'TENTATIVE' | 'HELD' | 'CONFIRMED' | 'CANCELLED';
   bookedValue: string | null; updatedAt: string;
@@ -42,6 +43,7 @@ export default function ReviewRequest({ id, role, canUpdateStatus = true, canMes
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState('');
   const [formTouched, setFormTouched] = useState(false);
+  const [scheduleDirty,setScheduleDirty] = useState(false);
   const [editingVersion, setEditingVersion] = useState('');
   const markEdited = () => { if (!formTouched) setEditingVersion(booking?.updatedAt ?? ''); setFormTouched(true); };
 
@@ -59,6 +61,8 @@ export default function ReviewRequest({ id, role, canUpdateStatus = true, canMes
       ? [{ label: 'Agreed booking value', before: booking.bookedValue === null ? 'Not set' : money(booking.bookedValue), after: normalizedAmount === null ? 'Not set' : money(normalizedAmount) }] : []),
     ...(note.trim() !== (booking.reviewNote || '').trim() ? [{ label: 'Coordinator notes / client update', before: booking.reviewNote || 'Not set', after: note.trim() || 'Not set' }] : []),
   ] : [];
+
+  const {dialog:exitDialog} = useUnsavedChangesGuard((formTouched && changes.length > 0) || scheduleDirty);
 
   function previewSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setResult('');
@@ -112,6 +116,7 @@ export default function ReviewRequest({ id, role, canUpdateStatus = true, canMes
             { label: 'Color palette', value: booking.colorPalette },
             { label: 'Special requests', value: booking.specialRequests },
           ]}/>
+          {booking.venueLatitude != null && booking.venueLongitude != null && <a className="mt-4 inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100" href={`https://www.openstreetmap.org/?mlat=${booking.venueLatitude}&mlon=${booking.venueLongitude}#map=16/${booking.venueLatitude}/${booking.venueLongitude}`} target="_blank" rel="noopener noreferrer">View pinned event venue in OpenStreetMap <ArrowRight size={15}/></a>}
         </BookingPanel>
         <BookingPanel title="Client contact" description="Details to use when following up on this request.">
           <BookingInfoGrid items={[
@@ -148,11 +153,12 @@ export default function ReviewRequest({ id, role, canUpdateStatus = true, canMes
           </form> : <div className={s.alert}>You can review this request, but your account cannot change its booking status.</div>}
         </BookingPanel>
         <BookingPanel title="Event scheduling" description="Organize the event timeline, assigned Coordinator and private notes.">
-          <EventScheduleEditor booking={booking} canEdit={canUpdateStatus} onSaved={refresh}/>
+          <EventScheduleEditor booking={booking} canEdit={canUpdateStatus} onSaved={refresh} onDirtyChange={setScheduleDirty}/>
         </BookingPanel>
         {canViewList && <Link className={`${s.actionLink} ${s.actionLinkSecondary}`} href={listHref}><ArrowLeft size={16}/> Back to booking requests</Link>}
       </aside>
     </div>}
+    {exitDialog}
     <BookingChangeDialog open={confirmationOpen} reference={booking?.reference ?? ''} changes={changes} busy={busy} error={result} onCancel={() => setConfirmationOpen(false)} onConfirm={() => void save()}/>
     <BookingSavedDialog open={savedOpen} reference={booking?.reference ?? ''} changes={savedChanges} canReturnToList={canViewList} onContinue={() => { setSavedOpen(false); if (canViewList) router.push(listHref); }}/>
   </div></main>;

@@ -63,6 +63,7 @@ test('chat still has messages, typing, Seen, attachment, mobile and navigation c
   assert.match(ui, /signalTyping/);
   assert.match(ui, /wasSeen/);
   assert.match(ui, /\/api\/uploads/);
-  assert.match(ui, /role !== 'ADMIN'/);
+  assert.match(ui, /<form className=\{styles\.composer\} onSubmit=\{send\}>/);
+  assert.doesNotMatch(ui, /Administrator oversight is read-only/);
   assert.match(ui, /styles\.mobileHiddenChat/);
 });

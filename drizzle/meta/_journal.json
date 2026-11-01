@@ -64,6 +64,13 @@
       "when": 1793400000000,
       "tag": "0008_client_dual_otp",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793500000000,
+      "tag": "0009_package_image_gallery",
+      "breakpoints": true
     }
   ]
 }

@@ -2,15 +2,16 @@
 
 import { useState, type ChangeEvent, type FormEvent } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, Eye, ImagePlus, Layers, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Eye, ImagePlus, Layers, Pencil, Plus, Trash2, X, ArrowLeft, ArrowRight } from 'lucide-react';
+import PackageImageCarousel from '@/components/ui/PackageImageCarousel';
 import { api, json } from '@/api-client/http';
 import { uploadImage } from '@/api-client/uploadImage';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { ListSkeleton } from '@/components/ui/LoadingSkeleton';
 
-type P = { id: string; name: string; description: string; inclusions: string[]; imageId: string | null; published: boolean; sortOrder: number };
-type Form = { name: string; description: string; inclusions: string; imageId: string; published: boolean; sortOrder: number };
-const blank: Form = { name: '', description: '', inclusions: '', published: false, sortOrder: 0, imageId: '' };
+type P = { id: string; name: string; description: string; inclusions: string[]; imageId: string | null; imageIds: string[]; published: boolean; sortOrder: number };
+type Form = { name: string; description: string; inclusions: string; imageIds: string[]; published: boolean; sortOrder: number };
+const blank: Form = { name: '', description: '', inclusions: '', published: false, sortOrder: 0, imageIds: [] };
 
 export default function PackageEditor() {
   const { data, loading, error, refresh } = useLiveQuery(() => api<{ packages: P[] }>('/api/packages'), [],{cacheKey:'admin:/api/packages',realtimeKinds:['packages','media_assets']});
@@ -27,22 +28,39 @@ export default function PackageEditor() {
   const update = <K extends keyof Form>(key: K, value: Form[K]) => setForm(f => ({ ...f, [key]: value }));
   const reset = () => { setEditing(null); setForm(blank); setStatus(''); setStatusError(false); };
   const choose = (p: P) => {
-    setEditing(p.id); setForm({ name: p.name, description: p.description, inclusions: p.inclusions.join('\n'), imageId: p.imageId ?? '', published: p.published, sortOrder: p.sortOrder });
+    setEditing(p.id); setForm({ name: p.name, description: p.description, inclusions: p.inclusions.join('\n'), imageIds: p.imageIds?.length ? [...p.imageIds] : p.imageId ? [p.imageId] : [], published: p.published, sortOrder: p.sortOrder });
     setStatus(''); setStatusError(false);
     window.scrollTo({top: 0, behavior: 'smooth'});
   };
   async function upload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]; event.target.value = '';
-    if (!file) return;
-    if (!file.size || file.size > 10 * 1024 * 1024) { setStatus('Package images must be 10 MB or smaller.'); setStatusError(true); return; }
-    setBusy(true); setStatus('Uploading image…'); setStatusError(false);
+    const files = Array.from(event.target.files ?? []); event.target.value = '';
+    if (!files.length) return;
+    if (files.length + form.imageIds.length > 10) { setStatus('A package can contain up to 10 photos. Remove existing photos first.'); setStatusError(true); return; }
+    if (files.some(f => !['image/jpeg','image/png','image/webp'].includes(f.type) || !f.size || f.size > 10 * 1024 * 1024)) {
+      setStatus('Each photograph must be JPG, PNG or WebP and no larger than 10 MB.'); setStatusError(true); return;
+    }
+    setBusy(true); setStatus('Uploading package photos…'); setStatusError(false);
+    const uploaded: string[] = [];
     try {
-      const asset = await uploadImage(file, 'PACKAGE');
-      update('imageId', asset.id);
-      setStatus('Photograph uploaded. Save the package to keep this image.');
-    } catch (err) { setStatus((err as Error).message); setStatusError(true); }
-    finally { setBusy(false); }
+      for (const file of files) {
+        const asset = await uploadImage(file, 'PACKAGE');
+        uploaded.push(asset.id);
+        setStatus(`Uploaded ${uploaded.length} of ${files.length} photos…`);
+      }
+      setForm(previous => ({ ...previous, imageIds: [...previous.imageIds, ...uploaded] }));
+      setStatus(`${uploaded.length} photos uploaded. Save the package to publish the gallery.`);
+    } catch (err) {
+      if (uploaded.length) setForm(previous => ({ ...previous, imageIds: [...previous.imageIds, ...uploaded] }));
+      setStatus(`Upload interrupted: ${(err as Error).message}. Successfully uploaded photos are retained in the form.`); setStatusError(true);
+    } finally { setBusy(false); }
   }
+  const removeImage = (id: string) => update('imageIds', form.imageIds.filter(image => image !== id));
+  const shiftImage = (index: number, by: number) => {
+    const next = [...form.imageIds]; const dest = index + by;
+    if (dest < 0 || dest >= next.length) return;
+    [next[index],next[dest]] = [next[dest],next[index]];
+    update('imageIds',next);
+  };
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!form.name.trim() || !form.description.trim()) { setStatus('Add a package name and description.'); setStatusError(true); return; }
@@ -51,7 +69,7 @@ export default function PackageEditor() {
       const payload = {
         ...form, name: form.name.trim(), description: form.description.trim(),
         inclusions: form.inclusions.split('\n').map(v => v.trim()).filter(Boolean),
-        imageId: form.imageId || null,
+        imageIds: form.imageIds, imageId: form.imageIds[0] || null,
       };
       await api(editing ? `/api/packages/${editing}` : '/api/packages', json(editing ? 'PATCH' : 'POST', payload));
       await refresh();
@@ -79,8 +97,19 @@ export default function PackageEditor() {
         <form onSubmit={save} className="dm-editor-fields"><label>Package name<input required minLength={2} maxLength={160} value={form.name} onChange={e=>update('name',e.target.value)} placeholder="e.g. Signature Celebration" /></label>
           <label>About the package<textarea required maxLength={3000} rows={4} value={form.description} onChange={e=>update('description',e.target.value)} placeholder="Describe the experience and who it is designed for…" /></label>
           <label>Inclusions — one item per line<textarea rows={6} value={form.inclusions} onChange={e=>update('inclusions',e.target.value)} placeholder={'Event consultation\nCoordination support\n...'} /><span className="dm-editor-help">Each line becomes an inclusion on the client package page (up to 50, 240 characters per line).</span></label>
-          <label>Cover photograph (JPG, PNG, WebP · maximum 10 MB)<input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={upload} /><span className="dm-editor-help">Images upload directly to Cloudinary, so high-quality photos do not exceed Vercel request limits.</span></label>
-          {form.imageId && <div><img className="dm-editor-preview-image" src={`/api/assets/${form.imageId}`} alt="Chosen package cover" /><button type="button" className="btn btn-ghost btn-small" style={{marginTop:9}} onClick={()=>update('imageId','')} disabled={busy}><X size={14}/> Remove photo</button></div>}
+          <label>Package gallery (up to 10 photos, each max 10 MB)
+            <input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy || form.imageIds.length >= 10} onChange={upload} />
+            <span className="dm-editor-help">Upload JPG, PNG or WebP images. The first photo is the cover. Use arrows to reorder before saving.</span>
+          </label>
+          {form.imageIds.length > 0 && <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label="Package photo order">{form.imageIds.map((id,index)=><div key={id} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`/api/assets/${id}`} alt={`Package photo ${index+1}`} className="aspect-[4/3] w-full object-cover"/>
+            <div className="flex items-center justify-between gap-1 p-2"><span className="text-[11px] font-semibold">{index===0?'Cover':`Photo ${index+1}`}</span><div className="flex gap-1">
+              <button type="button" aria-label={`Move photo ${index+1} left`} disabled={busy || index===0} onClick={()=>shiftImage(index,-1)} className="rounded border p-1 disabled:opacity-30"><ArrowLeft size={13}/></button>
+              <button type="button" aria-label={`Move photo ${index+1} right`} disabled={busy || index===form.imageIds.length-1} onClick={()=>shiftImage(index,1)} className="rounded border p-1 disabled:opacity-30"><ArrowRight size={13}/></button>
+              <button type="button" aria-label={`Remove photo ${index+1}`} disabled={busy} onClick={()=>removeImage(id)} className="rounded border p-1 text-rose-600 disabled:opacity-30"><X size={13}/></button>
+            </div></div>
+          </div>)}</div>}
           <div className="dm-editor-fields dm-editor-fields--two"><label>Display order<input type="number" min={0} max={1000} value={form.sortOrder} onChange={e=>update('sortOrder',Math.min(1000,Math.max(0,Number(e.target.value)||0)))} /></label><label style={{display:'flex',justifyContent:'center',flexDirection:'column'}}>Visibility<span style={{display:'flex',alignItems:'center',gap:8,marginTop:8,fontSize:13,fontWeight:500}}><input type="checkbox" checked={form.published} onChange={e=>update('published',e.target.checked)} /> Publish to clients</span></label></div>
           <p className="dm-editor-help">Packages with lower display orders appear first. The first three published packages are featured on the homepage.</p>
           {status && <p role="status" className={statusError?'error':'notice'}>{status}</p>}
@@ -88,8 +117,8 @@ export default function PackageEditor() {
         </form>
       </div>
       <div style={{display:'grid',gap:20}}>
-        {showPreview && <section className="dm-editor-panel"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12}}><h3>Client-facing preview</h3><span className="dm-editor-status dm-editor-status--hidden">UNSAVED</span></div><p className="dm-editor-panel__sub">See how the current package photograph and details will appear.</p><div style={{border:'1px solid #e5e8ec',borderRadius:10,overflow:'hidden'}}><div style={{aspectRatio:'1.65',background:'linear-gradient(140deg,#1d4b70,#09243d)',display:'grid',placeItems:'center',overflow:'hidden'}}>{form.imageId?<img src={`/api/assets/${form.imageId}`} alt="Package visual preview" style={{width:'100%',height:'100%',objectFit:'cover'}} />:<ImagePlus size={38} color="#d5e6f0"/>}</div><div style={{padding:17}}><small style={{letterSpacing:'.12em',color:'#9e7545'}}>EVENT PACKAGE</small><h3 style={{fontFamily:'Georgia,serif',fontWeight:500,fontSize:28,margin:'10px 0'}}>{form.name || 'Package name'}</h3><p className="hint">{form.description || 'A short, inviting description of the experience…'}</p><ul style={{paddingLeft:18,color:'#536a7e',fontSize:12,lineHeight:1.8}}>{form.inclusions.split('\n').map(x=>x.trim()).filter(Boolean).slice(0,3).map((x,i)=><li key={i}>{x}</li>)}</ul></div></div></section>}
-        <section className="dm-editor-panel"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12}}><h3>Package library</h3><span className="dm-editor-status dm-editor-status--hidden">{packages.length} TOTAL</span></div><p className="dm-editor-panel__sub">Select a package to edit, or change which listings are visible.</p><div style={{display:'flex',gap:7,marginBottom:12,flexWrap:'wrap'}}>{(['all','published','hidden'] as const).map(v=><button type="button" key={v} className={`btn btn-small ${filter===v?'':'btn-ghost'}`} onClick={()=>setFilter(v)} style={{textTransform:'capitalize'}}>{v}</button>)}</div>{loading && !data ? <ListSkeleton label="Loading packages"/> : visible.length ? visible.map(p=><div className="dm-admin-package-item" key={p.id}>{p.imageId?<img src={`/api/assets/${p.imageId}`} alt={`${p.name} cover`} />:<span className="dm-admin-package-item__placeholder"><Layers size={27}/></span>}<div className="dm-admin-package-item__body"><strong>{p.name}</strong><p className="dm-admin-package-item__meta"><span className={`dm-editor-status ${p.published?'dm-editor-status--published':'dm-editor-status--hidden'}`}>{p.published?'Published':'Hidden'}</span> &nbsp; Order {p.sortOrder} · {p.inclusions.length} inclusions</p><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><button type="button" className="btn btn-small" disabled={busy} onClick={()=>choose(p)}><Pencil size={13}/> Edit</button>{p.published && <Link className="btn btn-small btn-ghost" target="_blank" rel="noreferrer" href={`/packages/${p.id}`}><ArrowUpRight size={13}/> View</Link>}<button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={()=>void remove(p)} aria-label={`Delete ${p.name}`}><Trash2 size={13}/></button></div></div></div>) : <p className="hint">{filter==='all'?'No packages yet. Create your first one.':'No packages match this filter.'}</p>}</section>
+        {showPreview && <section className="dm-editor-panel"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12}}><h3>Client-facing preview</h3><span className="dm-editor-status dm-editor-status--hidden">UNSAVED</span></div><p className="dm-editor-panel__sub">See how the current package photograph and details will appear.</p><div style={{border:'1px solid #e5e8ec',borderRadius:10,overflow:'hidden'}}><div style={{aspectRatio:'1.65',background:'linear-gradient(140deg,#1d4b70,#09243d)',display:'grid',placeItems:'center',overflow:'hidden'}}><PackageImageCarousel imageIds={form.imageIds} alt={form.name || 'Package preview'} placeholder={<ImagePlus size={38} color="#d5e6f0"/>}/></div><div style={{padding:17}}><small style={{letterSpacing:'.12em',color:'#9e7545'}}>EVENT PACKAGE</small><h3 style={{fontFamily:'Inter,Arial,sans-serif',fontWeight:500,fontSize:28,margin:'10px 0'}}>{form.name || 'Package name'}</h3><p className="hint">{form.description || 'A short, inviting description of the experience…'}</p><ul style={{paddingLeft:18,color:'#536a7e',fontSize:12,lineHeight:1.8}}>{form.inclusions.split('\n').map(x=>x.trim()).filter(Boolean).slice(0,3).map((x,i)=><li key={i}>{x}</li>)}</ul></div></div></section>}
+        <section className="dm-editor-panel"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12}}><h3>Package library</h3><span className="dm-editor-status dm-editor-status--hidden">{packages.length} TOTAL</span></div><p className="dm-editor-panel__sub">Select a package to edit, or change which listings are visible.</p><div style={{display:'flex',gap:7,marginBottom:12,flexWrap:'wrap'}}>{(['all','published','hidden'] as const).map(v=><button type="button" key={v} className={`btn btn-small ${filter===v?'':'btn-ghost'}`} onClick={()=>setFilter(v)} style={{textTransform:'capitalize'}}>{v}</button>)}</div>{loading && !data ? <ListSkeleton label="Loading packages"/> : visible.length ? visible.map(p=><div className="dm-admin-package-item" key={p.id}><div className="h-[86px] w-[94px] shrink-0 overflow-hidden rounded-lg"><PackageImageCarousel imageIds={p.imageIds} imageId={p.imageId} alt={p.name} placeholder={<Layers size={27}/>}/></div><div className="dm-admin-package-item__body"><strong>{p.name}</strong><p className="dm-admin-package-item__meta"><span className={`dm-editor-status ${p.published?'dm-editor-status--published':'dm-editor-status--hidden'}`}>{p.published?'Published':'Hidden'}</span> &nbsp; Order {p.sortOrder} · {p.inclusions.length} inclusions · {(p.imageIds?.length || (p.imageId ? 1 : 0))} photos</p><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><button type="button" className="btn btn-small" disabled={busy} onClick={()=>choose(p)}><Pencil size={13}/> Edit</button>{p.published && <Link className="btn btn-small btn-ghost" target="_blank" rel="noreferrer" href={`/packages/${p.id}`}><ArrowUpRight size={13}/> View</Link>}<button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={()=>void remove(p)} aria-label={`Delete ${p.name}`}><Trash2 size={13}/></button></div></div></div>) : <p className="hint">{filter==='all'?'No packages yet. Create your first one.':'No packages match this filter.'}</p>}</section>
       </div>
     </div>
   </main>;

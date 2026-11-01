@@ -8,7 +8,7 @@ const source = name => fs.readFileSync(path.join(__dirname, '..', name), 'utf8')
 const changedTypeScript = [
   'src/db/schema.ts', 'app/api/events/route.ts', 'app/api/messages/route.ts',
   'app/api/messages/threads/route.ts', 'app/api/messages/typing/route.ts',
-  'src/lib/live-events.ts', 'src/components/shared/MessagesPanel.tsx',
+  'src/lib/live-events.ts', 'src/models/messaging.ts', 'src/components/shared/MessagesPanel.tsx',
 ];
 
 test('all complete messaging sources parse successfully', () => {
@@ -39,18 +39,18 @@ test('API validates conversation access for messaging, read, and typing changes'
   const api = source('app/api/messages/route.ts');
   const typing = source('app/api/messages/typing/route.ts');
   const list = source('app/api/messages/threads/route.ts');
-  for (const text of [api, typing]) assert.match(text, /await readBooking\(/);
-  assert.match(typing, /user\.role === 'ADMIN'/);
+  for (const text of [api, typing]) assert.match(text, /await requireMessageBooking\(/);
+  assert.doesNotMatch(typing, /user\.role === 'ADMIN'/);
   assert.match(typing, /bookingId: z\.string\(\)\.uuid\(\)/);
   assert.match(typing, /userId: user\.id/);
-  assert.match(list, /await readBookings\(user\)/);
+  assert.match(list, /await readMessageBookings\(user\)/);
   assert.match(list, /messages\.senderId, user\.id/);
 });
 
 test('read receipts use actual sender ID and role-specific recipient, not sender role for bubble placement', () => {
   const ui = source('src/components/shared/MessagesPanel.tsx');
   assert.match(ui, /message\.senderId === viewerId/);
-  assert.match(ui, /role === 'CLIENT' \? 'COORDINATOR' : 'CLIENT'/);
+  assert.match(ui, /role === 'CLIENT' \? read\.role !== 'CLIENT' : read\.role === 'CLIENT'/);
   assert.match(ui, /read\.lastReadAt/);
   assert.match(ui, /markRead/);
   assert.match(ui, /<CheckCheck/);
@@ -68,12 +68,12 @@ test('typing signals expire, debounce and use PostgreSQL/Supabase Realtime inste
   assert.match(source('supabase/enable-realtime.sql'), /'message_reads','message_typing'/);
 });
 
-test('inbox, mobile chat, attachments, realtime refresh and original read-only oversight remain', () => {
+test('inbox, mobile chat, attachments, realtime refresh and admin replies remain', () => {
   const ui = source('src/components/shared/MessagesPanel.tsx');
   assert.match(ui, /\/api\/messages\/threads/);
   assert.match(ui, /subscribeToChatEvents/);
   assert.match(ui, /\/api\/uploads/);
-  assert.match(ui, /role !== 'ADMIN'/);
+  assert.match(ui, /<form className=\{styles\.composer\} onSubmit=\{send\}>/);
   assert.match(ui, /styles\.mobileHidden/);
   assert.match(ui, /KeyboardEvent/);
   assert.match(ui, /<Link href=/);
@@ -82,7 +82,7 @@ test('inbox, mobile chat, attachments, realtime refresh and original read-only o
 test('migration journal includes new migration in sequence and no existing event data is dropped', () => {
   const journal = JSON.parse(source('drizzle/meta/_journal.json'));
   assert.ok(journal.entries.some(entry => entry.tag === '0007_realtime_chat_presence'));
-  assert.equal(journal.entries.at(-1).tag, '0008_client_dual_otp');
+  assert.equal(journal.entries.at(-1).tag, '0009_package_image_gallery');
   const sql = source('drizzle/0007_realtime_chat_presence.sql');
   assert.match(sql, /CREATE TABLE IF NOT EXISTS public\.message_typing/);
   assert.doesNotMatch(sql, /DROP TABLE|TRUNCATE|DELETE FROM/i);

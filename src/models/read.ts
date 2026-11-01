@@ -1,3 +1,4 @@
+import {requireMessageBooking} from '@/models/messaging';
 import {db} from '@/db';import {bookings,packages,users,bookingHistory,messages,messageReads,siteContent} from '@/db/schema';
 import {and,eq,desc,ne,gt,sql,asc} from 'drizzle-orm';import type {Actor} from '@/lib/auth';import {HttpError} from '@/lib/http';import {can} from '@/lib/access';
 export async function readBookings(user:Actor){
@@ -10,7 +11,7 @@ export async function readBooking(id:string,user:Actor){
  const [history,packageInfo]=await Promise.all([db.select({id:bookingHistory.id,fromStatus:bookingHistory.fromStatus,toStatus:bookingHistory.toStatus,note:bookingHistory.note,createdAt:bookingHistory.createdAt,actorName:users.fullName}).from(bookingHistory).innerJoin(users,eq(users.id,bookingHistory.actorId)).where(eq(bookingHistory.bookingId,id)).orderBy(desc(bookingHistory.createdAt)), item.booking.packageId?db.select().from(packages).where(eq(packages.id,item.booking.packageId)).limit(1):Promise.resolve([])]);
  return {...item.booking,scheduleNotes:await can(user,'bookings.review')?item.booking.scheduleNotes:'',assignedCoordinatorId:await can(user,'bookings.review')?item.booking.assignedCoordinatorId:null,client:item.booking.clientId?item.client:{id:null,fullName:item.booking.contactName,email:item.booking.contactEmail,phone:item.booking.contactPhone},package:packageInfo[0]||null,history};
 }
-export async function readConversation(bookingId:string,user:Actor){await readBooking(bookingId,user);return db.select({id:messages.id,bookingId:messages.bookingId,senderId:messages.senderId,senderName:users.fullName,senderRole:users.role,body:messages.body,assetId:messages.assetId,createdAt:messages.createdAt}).from(messages).innerJoin(users,eq(users.id,messages.senderId)).where(eq(messages.bookingId,bookingId)).orderBy(asc(messages.createdAt));}
+export async function readConversation(bookingId:string,user:Actor){await requireMessageBooking(bookingId,user);return db.select({id:messages.id,bookingId:messages.bookingId,senderId:messages.senderId,senderName:users.fullName,senderRole:users.role,body:messages.body,assetId:messages.assetId,createdAt:messages.createdAt}).from(messages).innerJoin(users,eq(users.id,messages.senderId)).where(eq(messages.bookingId,bookingId)).orderBy(asc(messages.createdAt));}
 export async function unreadCount(user:Actor){
  // One aggregate query; avoids one lookup and one count per booking in large systems.
  const hasAll = await can(user,'bookings.view.all');

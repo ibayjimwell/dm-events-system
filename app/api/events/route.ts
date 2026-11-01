@@ -37,6 +37,9 @@ export async function GET(req: Request) {
         catch { /* closed stream */ }
       };
       const allowedBooking = (id: unknown) => typeof id === 'string' && (canViewAll || allowed.has(id));
+      // Messaging module grants are independent of the Bookings module.
+      // Only chat-related events use this broader staff-specific scope.
+      const allowedChatBooking = (id: unknown) => typeof id === 'string' && canChat && (user.role !== 'CLIENT' || allowed.has(id));
       const channel = realtime.channel(`dm-bridge-${user.id}-${crypto.randomUUID()}`);
       for (const table of ['bookings', 'booking_history', 'packages', 'site_content']) {
         channel.on('postgres_changes', { schema: 'public', table, event: '*' }, payload => {
@@ -48,19 +51,19 @@ export async function GET(req: Request) {
       }
       channel.on('postgres_changes', { schema: 'public', table: 'messages', event: '*' }, payload => {
         const row = (payload as RealtimeRow).new;
-        if (!allowedBooking(row?.booking_id)) return;
-        if (canChat) write('chat', { kind: 'message', bookingId: row?.booking_id });
+        if (!allowedChatBooking(row?.booking_id)) return;
+        write('chat', { kind: 'message', bookingId: row?.booking_id });
         write('change', { kind: 'messages' });
       });
       if (canChat) {
         channel.on('postgres_changes', { schema: 'public', table: 'message_reads', event: '*' }, payload => {
           const row = (payload as RealtimeRow).new;
-          if (!allowedBooking(row?.booking_id)) return;
+          if (!allowedChatBooking(row?.booking_id)) return;
           write('chat', { kind: 'read', bookingId: row?.booking_id });
         });
         channel.on('postgres_changes', { schema: 'public', table: 'message_typing', event: '*' }, payload => {
           const row = (payload as RealtimeRow).new;
-          if (!allowedBooking(row?.booking_id) || row?.user_id === user.id) return;
+          if (!allowedChatBooking(row?.booking_id) || row?.user_id === user.id) return;
           write('chat', {
             kind: 'typing', bookingId: row?.booking_id,
             userId: row?.user_id,

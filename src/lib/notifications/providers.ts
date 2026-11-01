@@ -46,9 +46,9 @@ function messageContent(p: NotificationPayload) {
         sms: `DM Events: Cancellation request for ${p.reference} received. Your booking is not cancelled until staff reviews it.` };
     case 'COORDINATOR_MESSAGE':
       return { subject: `DM Events | New message about ${p.reference}`,
-        heading: 'A coordinator has sent an update',
+        heading: 'DM Events has sent an update',
         summary: 'You have a new message from DM Events. Sign in to your client account to read and respond securely.',
-        sms: `DM Events: You have a new coordinator message about ${p.reference}. Sign in to your DM Events client account to read it.` };
+        sms: `DM Events: You have a new team message about ${p.reference}. Sign in to your DM Events client account to read it.` };
   }
 }
 

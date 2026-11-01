@@ -1,6 +1,6 @@
 import {can} from '@/lib/access';
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or, sql } from 'drizzle-orm';
 
 import { route, HttpError } from '@/lib/http';
 import { actor } from '@/lib/auth';
@@ -54,7 +54,7 @@ export const GET = route(
         .from(packages)
         .where(
           and(
-            eq(packages.imageId, id),
+            or(eq(packages.imageId, id), sql`${id}::uuid = ANY(${packages.imageIds})`),
             eq(packages.published, true)
           )
         );

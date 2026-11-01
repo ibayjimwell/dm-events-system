@@ -77,7 +77,7 @@ test('authentication and RBAC stay server-enforced with request-scoped memoizati
     assert.match(src(file),/await actor\(\)/);
   }
   assert.match(src('app/api/messages/route.ts'), /requireActor\(/);
-  assert.match(src('app/api/messages/route.ts'), /readBooking\(/);
+  assert.match(src('app/api/messages/route.ts'), /requireMessageBooking\(/);
   assert.match(src('app/api/messages/route.ts'), /after\(async \(\) =>/);
   assert.match(src('app/api/messages/route.ts'), /return ok\(\{ message: m \}, 201\)/);
 });

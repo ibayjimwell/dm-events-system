@@ -10,6 +10,7 @@ import {
   Sparkles, UsersRound, Wallet, X,
 } from 'lucide-react';
 import { api, json } from '@/api-client/http';
+import useUnsavedChangesGuard from '@/hooks/useUnsavedChangesGuard';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { DetailSkeleton } from '@/components/ui/LoadingSkeleton';
 import BookingChangeDialog, { type BookingChange } from '@/components/ui/BookingChangeDialog';
@@ -25,6 +26,8 @@ type Booking = {
   eventStartTime: string | null;
   eventEndTime: string | null;
   venue: string | null;
+  venueLatitude?: number | null;
+  venueLongitude?: number | null;
   status: string;
   guestCount: number;
   estimatedBudget: string | null;
@@ -186,6 +189,8 @@ export default function BookedEventExperience({ id }: { id: string }) {
       ? [{ label: 'Special requests', before: booking.specialRequests || 'Not set', after: requests.trim() || 'Not set' }] : []),
   ] : [];
 
+  const {dialog:exitDialog} = useUnsavedChangesGuard(editing && changes.length > 0);
+
   function editPreferences() {
     if (!booking || busy || !editable) return;
     if (!editing) {
@@ -312,7 +317,8 @@ export default function BookedEventExperience({ id }: { id: string }) {
                 <Fact label="Event type" icon={<Sparkles size={19}/>}>{booking.eventType}</Fact>
                 <Fact label="Expected guests" icon={<UsersRound size={19}/>}>{Number(booking.guestCount || 0).toLocaleString('en-PH')} guests</Fact>
                 <Fact label="Event location" icon={<MapPin size={19}/>} wide>{shown(booking.venue, 'Not yet provided')}</Fact>
-                <Fact label="Estimated budget" icon={<Wallet size={19}/>}>{shown(booking.estimatedBudget, 'Not specified')}</Fact>
+                {booking.venueLatitude != null && booking.venueLongitude != null && <Fact label="Venue map" icon={<MapPin size={19}/>} wide><a className="font-semibold text-blue-700 underline underline-offset-2" href={`https://www.openstreetmap.org/?mlat=${booking.venueLatitude}&mlon=${booking.venueLongitude}#map=16/${booking.venueLatitude}/${booking.venueLongitude}`} target="_blank" rel="noopener noreferrer">Open pinned venue in OpenStreetMap <ExternalLink size={14} className="inline"/></a></Fact>}
+                <Fact label="Estimated budget" icon={<Wallet size={19}/>}>{php(booking.estimatedBudget) || 'Not specified'}</Fact>
                 {booking.bookedValue !== null && booking.bookedValue !== undefined && <Fact label="Recorded booking value" icon={<ShieldCheck size={19}/>}>{php(booking.bookedValue) || 'Not recorded'}</Fact>}
               </div>
               <p className={s.finePrint}><Info size={16}/> Estimated budget and recorded booking value are not a payment confirmation or invoice.</p>
@@ -422,6 +428,7 @@ export default function BookedEventExperience({ id }: { id: string }) {
           </aside>
         </div>
       </>}
+      {exitDialog}
       <BookingChangeDialog open={confirmChanges} reference={booking?.reference || ''} changes={changes} busy={busy}
         error={feedback?.success === false ? feedback.message : ''}
         onCancel={() => { if (!busy) setConfirmChanges(false); }} onConfirm={() => void savePreferences()}/>

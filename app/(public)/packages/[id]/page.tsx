@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import PackageImageCarousel from '@/components/ui/PackageImageCarousel';
 import { ArrowLeft, ArrowRight, CalendarDays, Check, MessageCircle, Sparkles } from 'lucide-react';
 import { and, eq } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
@@ -18,7 +19,7 @@ export default async function PackagePage({ params }: { params: Promise<{id:stri
     <div className="dm-marketing__container"><nav className="dm-package-detail__breadcrumb" aria-label="Breadcrumb"><Link href="/">Home</Link><span>/</span><Link href="/packages">Packages</Link><span>/</span><span aria-current="page">{pkg.name}</span></nav>
       <section className="dm-package-detail__layout">
         <div className="dm-package-detail__left">
-          <div className="dm-package-detail__image">{pkg.imageId ? <img src={`/api/assets/${pkg.imageId}`} alt={`${pkg.name} event package`} /> : <span className="dm-package-detail__placeholder"><Sparkles size={56} strokeWidth={1} /> DM EVENTS</span>}<span className="dm-package-detail__image-badge">EVENT PACKAGE</span></div>
+          <div className="dm-package-detail__image"><PackageImageCarousel imageIds={pkg.imageIds} imageId={pkg.imageId} alt={pkg.name} placeholder={<span className="dm-package-detail__placeholder"><Sparkles size={56} strokeWidth={1} /> DM EVENTS</span>}/><span className="dm-package-detail__image-badge">EVENT PACKAGE</span></div>
           <div className="dm-package-detail__description"><p className="dm-eyebrow"><span className="dm-line" />THE EXPERIENCE</p><h2>About this package</h2><p>{pkg.description}</p></div>
           <div className="dm-package-detail__inclusions"><h2>What's included</h2>{pkg.inclusions.length ? <ul>{pkg.inclusions.map((value,i)=><li key={i}><span><Check size={16} /></span>{value}</li>)}</ul> : <p>Contact our team for the current inclusions and available options.</p>}</div>
         </div>

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import PackageImageCarousel from '@/components/ui/PackageImageCarousel';
 import { ArrowUpRight, Check, Image as ImageIcon } from 'lucide-react';
 
 export type PublicPackage = {
@@ -7,21 +8,16 @@ export type PublicPackage = {
   description: string;
   inclusions: string[];
   imageId: string | null;
+  imageIds?: string[];
 };
 
 export default function PackageShowcaseCard({ item, index = 0 }: { item: PublicPackage; index?: number }) {
   return (
     <article className="dm-showcase-card">
-      <Link className="dm-showcase-card__image" href={`/packages/${item.id}`} aria-label={`See ${item.name} package details`}>
-        {item.imageId ? (
-          // Same-party authenticated asset proxy authorizes published package images.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={`/api/assets/${item.imageId}`} alt={`${item.name} event package`} loading="lazy" />
-        ) : (
-          <span className={`dm-showcase-card__fallback dm-showcase-card__fallback--${index % 3}`}><ImageIcon size={38} strokeWidth={1.2} aria-hidden="true" /></span>
-        )}
+      <div className="dm-showcase-card__image">
+        <PackageImageCarousel imageIds={item.imageIds} imageId={item.imageId} alt={item.name} placeholder={<ImageIcon size={38} strokeWidth={1.2} aria-hidden="true"/>} />
         <span className="dm-showcase-card__counter">{String(index + 1).padStart(2, '0')}</span>
-      </Link>
+      </div>
       <div className="dm-showcase-card__body">
         <p className="dm-mini-label">EVENT PACKAGE</p>
         <h3>{item.name}</h3>

@@ -5,7 +5,7 @@
 .hero:after{content:'';position:absolute;z-index:-1;width:370px;height:370px;right:-115px;top:-255px;border:1px solid rgba(225,195,139,.3);border-radius:50%;box-shadow:0 0 0 43px rgba(230,202,151,.045),0 0 0 89px rgba(230,202,151,.03)}
 .heroInner{display:flex;justify-content:space-between;align-items:center;gap:22px}
 .eyebrow{display:flex;align-items:center;gap:8px;margin-bottom:12px;color:#e7c991;font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}
-.hero h1{font-family:Georgia,'Times New Roman',serif;font-size:clamp(27px,3.4vw,43px);line-height:1.12;letter-spacing:-.025em;font-weight:500;color:#fff;overflow-wrap:anywhere}
+.hero h1{font-family: Inter, Arial, sans-serif;font-size:clamp(27px,3.4vw,43px);line-height:1.12;letter-spacing:-.025em;font-weight:500;color:#fff;overflow-wrap:anywhere}
 .hero p{max-width:650px;margin-top:11px;font-size:13px;line-height:1.8;color:#d2e0e9}
 .heroActions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:10px;flex-shrink:0}
 .heroLink{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:10px 16px;border:1px solid #d2b77d;border-radius:9px;background:#e9c990;color:#132e46;font-size:12px;font-weight:800;text-decoration:none;transition:transform .15s,background .15s}
@@ -21,7 +21,7 @@
 .summaryNote{display:block;margin-top:7px;color:#8797a7;font-size:11px;line-height:1.5}
 .panel{overflow:hidden;min-width:0;border:1px solid #e0e8ef;border-radius:19px;background:#fff;box-shadow:0 9px 25px rgba(15,43,70,.045)}
 .panelHead{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:23px 25px;border-bottom:1px solid #edf1f4}
-.panelHead h2{margin:0;color:#15344a;font-family:Georgia,'Times New Roman',serif;font-size:23px;font-weight:500;line-height:1.25}
+.panelHead h2{margin:0;color:#15344a;font-family: Inter, Arial, sans-serif;font-size:23px;font-weight:500;line-height:1.25}
 .panelHead p{margin-top:5px;font-size:12px;line-height:1.6;color:#7d8fa1}
 .panelBody{padding:23px 25px}
 .toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:21px}

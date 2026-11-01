@@ -13,6 +13,8 @@ import { api, json } from '@/api-client/http';
 import { assertAvailableDate } from '@/api-client/bookingAvailability';
 import { uploadImage } from '@/api-client/uploadImage';
 import AvailableDatePicker from '@/components/ui/AvailableDatePicker';
+import PackageImageCarousel from '@/components/ui/PackageImageCarousel';
+import VenueLocationPicker from '@/components/ui/VenueLocationPicker';
 import CountryPhoneInput from '@/components/ui/CountryPhoneInput';
 import { InlineSkeleton } from '@/components/ui/LoadingSkeleton';
 import { normalizePhoneNumber, type PhoneCountry } from '@/lib/validators';
@@ -25,6 +27,7 @@ type PublicPackage = {
   description: string;
   inclusions: string[];
   imageId: string | null;
+  imageIds?: string[];
 };
 type Values = {
   contactName: string;
@@ -79,6 +82,7 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
   const [step, setStep] = useState<Step>(1);
   const [form, setForm] = useState<Values>(() => ({ ...initialValues, packageId: requestedPackageId }));
   const [customEventType, setCustomEventType] = useState('');
+  const [venueCoordinates, setVenueCoordinates] = useState<{lat:number;lng:number}|null>(null);
   const [packages, setPackages] = useState<PublicPackage[] | null>(null);
   const [packageError, setPackageError] = useState('');
   const [packageRefresh, setPackageRefresh] = useState(0);
@@ -193,7 +197,7 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
       if (!Number.isInteger(Number(form.guestCount)) || Number(form.guestCount) < 1 || Number(form.guestCount) > 100000) {
         setError('Enter an expected guest count between 1 and 100,000.'); return;
       }
-      if (!form.estimatedBudget.trim()) { setError('Enter an estimated budget or budget range.'); return; }
+      if (!/^(?:0|[1-9]\d{0,8})(?:\.\d{1,2})?$/.test(form.estimatedBudget) || Number(form.estimatedBudget) <= 0) { setError('Enter a positive amount in PHP, numbers only (up to two decimals).'); return; }
       if (form.venue.length > 2000 || form.estimatedBudget.length > 200) {
         setError('Please shorten the venue or budget details.'); return;
       }
@@ -260,7 +264,7 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
       const result = await api<{ booking: { id: string; reference: string } }>(isWalkIn ? '/api/bookings/walk-in' : '/api/bookings', json('POST', {
         ...form,
         eventType,
-        venue: form.venue.trim(),
+        venue: form.venue.trim(), venueLatitude: venueCoordinates?.lat ?? null, venueLongitude: venueCoordinates?.lng ?? null,
         estimatedBudget: form.estimatedBudget.trim(),
         contactPhone: normalizedPhone,
         guestCount: Number(form.guestCount),
@@ -358,20 +362,21 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
                   {packageError && <div className={styles.fullWidth}><p className={styles.error} role="alert">{packageError}</p><button type="button" className={styles.secondaryButton} onClick={() => setPackageRefresh(n => n + 1)}>Retry loading packages</button></div>}
                   {packages?.map((item, index) => {
                     const selected = form.packageId === item.id;
-                    return <button key={item.id} type="button" role="radio" aria-checked={selected}
+                    return <div key={item.id} role="radio" tabIndex={0} aria-checked={selected}
+                      onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();set('packageId',item.id);setPackageError('');}}}
                       onClick={() => { set('packageId', item.id); setPackageError(''); }}
                       className={`${styles.packageOption} ${selected ? styles.packageSelected : ''}`}>
-                      <span className={styles.packageImage}>
-                        {item.imageId ? <img src={`/api/assets/${item.imageId}`} alt="" loading="lazy" /> : <span className={`${styles.packageFallback} ${styles[`fallback${index % 3}`]}`}><ImageIcon size={39} strokeWidth={1.3} /></span>}
+                      <div className={styles.packageImage}>
+                        <PackageImageCarousel imageIds={item.imageIds} imageId={item.imageId} alt={item.name} placeholder={<span className={`${styles.packageFallback} ${styles[`fallback${index % 3}`]}`}><ImageIcon size={39} strokeWidth={1.3} /></span>}/>
                         <span className={styles.packageBadge}>{selected ? <><Check size={13} /> SELECTED</> : 'EVENT PACKAGE'}</span>
-                      </span>
+                      </div>
                       <span className={styles.packageContent}>
                         <strong>{item.name}</strong>
                         <span className={styles.packageDesc}>{item.description}</span>
                         {item.inclusions.length > 0 && <span className={styles.inclusions}>{item.inclusions.slice(0, 3).map((inclusion, i) => <span key={`${item.id}-${i}`}><Check size={13} />{inclusion}</span>)}</span>}
                         <span className={styles.selectPrompt}>{selected ? 'Your chosen package' : 'Select this package'}<span className={styles.radioMark}>{selected && <Check size={14} />}</span></span>
                       </span>
-                    </button>;
+                    </div>;
                   })}
                   {packages !== null && <button type="button" role="radio" aria-checked={!form.packageId}
                     onClick={() => set('packageId', '')} className={`${styles.packageOption} ${styles.unsure} ${!form.packageId ? styles.packageSelected : ''}`}>
@@ -408,12 +413,12 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
                   </div>
                   <div className={styles.field}>
                     <label htmlFor="booking-venue">Event location / venue <em>(optional)</em></label>
-                    <div className={styles.fieldIcon}><MapPin size={18}/><input id="booking-venue" className={inputClass} maxLength={2000} value={form.venue} onChange={e => set('venue', e.target.value)} placeholder="If you've chosen a venue, enter it here" /></div>
+                    <VenueLocationPicker id="booking-venue" value={form.venue} coordinates={venueCoordinates} onChange={address => { set('venue', address); setVenueCoordinates(null); }} onSelect={({lat,lng}) => setVenueCoordinates({lat,lng})} inputClassName={inputClass} />
                   </div>
                   <div className={styles.field}>
                     <label htmlFor="booking-budget">Estimated budget (PHP) <span>*</span></label>
-                    <div className={styles.fieldIcon}><Wallet size={18}/><input id="booking-budget" className={inputClass} maxLength={200} value={form.estimatedBudget} onChange={e => set('estimatedBudget', e.target.value)} placeholder="e.g. ₱40,000 – ₱60,000" required /></div>
-                    <small>An estimate is fine. Your final quotation will be discussed with DM Events.</small>
+                    <div className={styles.fieldIcon}><Wallet size={18}/><input id="booking-budget" className={inputClass} type="text" inputMode="decimal" pattern="(?:0|[1-9][0-9]{0,8})(?:\.[0-9]{1,2})?" maxLength={12} value={form.estimatedBudget} onChange={e => set('estimatedBudget', e.target.value.replace(/[^0-9.]/g, '').replace(/^(\d*\.?\d{0,2}).*$/, '$1'))} placeholder="e.g. 50000.00" required /></div>
+                    <small>Enter a single estimated amount in Philippine pesos, e.g. 50000.00. Final price is agreed with DM Events.</small>
                   </div>
                   <div className={styles.fullWidth}>
                     <button type="button" className={styles.optionalToggle} aria-expanded={showStyling} onClick={() => setShowStyling(open => !open)}>
@@ -459,7 +464,7 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
                   </section>
                   <section className={styles.summaryBlock}>
                     <div className={styles.summaryHead}><h3><PartyPopper size={17}/> Event details</h3><button type="button" onClick={() => move(3)}>Edit</button></div>
-                    <dl className={styles.summaryRows}><div><dt>Event type</dt><dd>{eventType}</dd></div><div><dt>Expected guests</dt><dd>{form.guestCount}</dd></div><div><dt>Event location</dt><dd>{form.venue.trim() || 'Not decided yet'}</dd></div><div><dt>Estimated budget</dt><dd>{form.estimatedBudget}</dd></div>{form.preferredTheme && <div><dt>Theme</dt><dd>{form.preferredTheme}</dd></div>}{form.colorPalette && <div><dt>Colors</dt><dd>{form.colorPalette}</dd></div>}{form.specialRequests && <div><dt>Special requests</dt><dd>{form.specialRequests}</dd></div>}{form.inspirationAssetId && <div><dt>Inspiration</dt><dd>Photo attached</dd></div>}</dl>
+                    <dl className={styles.summaryRows}><div><dt>Event type</dt><dd>{eventType}</dd></div><div><dt>Expected guests</dt><dd>{form.guestCount}</dd></div><div><dt>Event location</dt><dd>{form.venue.trim() || 'Not decided yet'}</dd></div><div><dt>Estimated budget</dt><dd>{new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP'}).format(Number(form.estimatedBudget || 0))}</dd></div>{form.preferredTheme && <div><dt>Theme</dt><dd>{form.preferredTheme}</dd></div>}{form.colorPalette && <div><dt>Colors</dt><dd>{form.colorPalette}</dd></div>}{form.specialRequests && <div><dt>Special requests</dt><dd>{form.specialRequests}</dd></div>}{form.inspirationAssetId && <div><dt>Inspiration</dt><dd>Photo attached</dd></div>}</dl>
                   </section>
                   <section className={styles.summaryBlock}>
                     <div className={styles.summaryHead}><h3><UserRound size={17}/> Contact information</h3><button type="button" onClick={() => move(4)}>Edit</button></div>

@@ -37,7 +37,7 @@ export default function BookingChangeDialog({ open, reference, changes, busy, er
       <div className="relative flex items-start justify-between gap-4">
         <div className="min-w-0">
           <span className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-[#edd3a0]"><ClipboardCheck size={15}/> Final review</span>
-          <h2 id="booking-confirm-title" className="!mb-0 !mt-3 !font-serif !text-[clamp(24px,4vw,30px)] !font-normal !leading-tight !text-white">Review booking changes</h2>
+          <h2 id="booking-confirm-title" className="!mb-0 !mt-3 !font-sans !text-[clamp(24px,4vw,30px)] !font-normal !leading-tight !text-white">Review booking changes</h2>
           <p id="booking-confirm-description" className="mt-2 break-words text-xs leading-6 text-[#d6e4ee]">Booking {reference} · Verify the details below before saving.</p>
         </div>
         <button type="button" aria-label="Close confirmation" disabled={busy} onClick={onCancel} className="rounded-lg border border-white/20 p-2 hover:bg-white/10 disabled:opacity-50"><X size={19}/></button>

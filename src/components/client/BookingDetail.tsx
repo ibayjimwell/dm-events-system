@@ -12,6 +12,7 @@ import {
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { DetailSkeleton } from '@/components/ui/LoadingSkeleton';
 import { api, json } from '@/api-client/http';
+import useUnsavedChangesGuard from '@/hooks/useUnsavedChangesGuard';
 import { niceDate } from '@/components/ui/Blocks';
 import BookingChangeDialog, { type BookingChange } from '@/components/ui/BookingChangeDialog';
 import { BookingStatus } from '@/components/ui/BookingSurface';
@@ -182,6 +183,8 @@ export default function BookingDetail({ id }: { id: string }) {
     ...(colors.trim() !== (booking.colorPalette || '').trim() ? [{ label: 'Color palette', before: booking.colorPalette || 'Not set', after: colors.trim() || 'Not set' }] : []),
     ...(requests.trim() !== (booking.specialRequests || '').trim() ? [{ label: 'Special requests', before: booking.specialRequests || 'Not set', after: requests.trim() || 'Not set' }] : []),
   ] : [];
+
+  const {dialog:exitDialog} = useUnsavedChangesGuard(edit && preferenceChanges.length > 0);
 
   function previewSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setMessage(''); setSavedChanges([]);
@@ -438,7 +441,8 @@ export default function BookingDetail({ id }: { id: string }) {
           </div>
         </>}
 
-      <BookingChangeDialog open={confirmationOpen} reference={booking?.reference ?? ''} changes={preferenceChanges}
+      {exitDialog}
+    <BookingChangeDialog open={confirmationOpen} reference={booking?.reference ?? ''} changes={preferenceChanges}
         error={messageSuccess ? '' : message} busy={busy} onCancel={() => { if (!busy) setConfirmationOpen(false); }}
         onConfirm={() => void save()}/>
     </div>
