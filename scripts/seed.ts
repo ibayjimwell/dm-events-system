@@ -127,13 +127,25 @@ async function seed() {
     }
   }
 
-  // Create administrator.
-  await seedAccount({
+  // Create or locate the configured Mother Admin.
+  const motherAdmin = await seedAccount({
     email: adminEmail,
     password: adminPassword,
     fullName: 'DM Events Administrator',
     role: 'ADMIN',
   });
+
+  // Explicit bootstrap: migration never guesses which existing administrator
+  // is the owner. A unique DB index prevents more than one Mother Admin.
+  const [currentMother] = await db.select().from(users).where(eq(users.isRootAdmin, true)).limit(1);
+  if (currentMother && currentMother.id !== motherAdmin.id) {
+    throw new Error('A different Mother Admin is already registered. Refusing to transfer ownership.');
+  }
+  if (!motherAdmin.isRootAdmin) {
+    await db.update(users).set({ isRootAdmin: true, updatedAt: new Date() })
+      .where(eq(users.id, motherAdmin.id));
+    console.log('Mother Admin access activated for SEED_ADMIN_EMAIL.');
+  }
 
   // Create coordinator.
   await seedAccount({

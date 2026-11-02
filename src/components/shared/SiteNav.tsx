@@ -125,8 +125,13 @@ export default function SiteNav({
 
   const allowed = new Set(permissions);
   const visible = (items: NavItem[]) => items.filter(item => !item.permission || allowed.has(item.permission));
-  const signedInHome = signedInRole === 'ADMIN' ? '/admin' : signedInRole === 'COORDINATOR' ? '/coordinator' : '/client';
-  const portalHome = role === 'ADMIN' ? '/admin' : role === 'COORDINATOR' ? '/coordinator' : role === 'CLIENT' ? '/client' : '/';
+  // /login resolves to the actual permitted landing route on the server.
+  const signedInHome = '/login';
+  const firstGranted = (items: NavItem[]) => visible(items)[0]?.href;
+  const portalHome = role === 'PUBLIC' ? '/'
+    : role === 'CLIENT' ? (firstGranted(clientLinks) ?? '/access-pending')
+    : role === 'COORDINATOR' ? (firstGranted(coordinatorLinks) ?? firstGranted(extraAdminLinks) ?? firstGranted(maintenanceLinks) ?? (allowed.has('bookings.create.walkin') ? '/coordinator/walk-in' : '/access-pending'))
+    : (firstGranted(adminLinks) ?? firstGranted(maintenanceLinks) ?? firstGranted(extraOperationsLinks) ?? (allowed.has('bookings.create.walkin') ? '/admin/walk-in' : '/access-pending'));
   const primary = role === 'PUBLIC' ? publicLinks : role === 'CLIENT' ? visible(clientLinks) : role === 'COORDINATOR' ? visible(coordinatorLinks) : visible(adminLinks);
   const groups: NavGroup[] = role === 'PUBLIC' || role === 'CLIENT' ? [] : role === 'ADMIN'
     ? [

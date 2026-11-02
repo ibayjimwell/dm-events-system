@@ -1,0 +1,26 @@
+name: DM Events - Purge deleted messages after 30 days
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '33 17 * * *' # Daily 01:33 Asia/Manila; GitHub schedule is best-effort.
+permissions:
+  contents: read
+jobs:
+  purge-expired-messages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RETENTION_ENDPOINT: ${{ secrets.DM_MESSAGE_RETENTION_URL }}
+      RETENTION_SECRET: ${{ secrets.DM_MESSAGE_RETENTION_SECRET }}
+    steps:
+      - name: Verify scheduler configuration
+        shell: bash
+        run: |
+          test -n "$RETENTION_ENDPOINT" || { echo 'Missing DM_MESSAGE_RETENTION_URL'; exit 1; }
+          test -n "$RETENTION_SECRET" || { echo 'Missing DM_MESSAGE_RETENTION_SECRET'; exit 1; }
+      - name: Purge expired chat data (retry in case of transient network error)
+        shell: bash
+        run: |
+          curl --fail-with-body --show-error --silent --retry 3 --retry-delay 15 --max-time 100 \
+            -H "Authorization: Bearer ${RETENTION_SECRET}" \
+            "${RETENTION_ENDPOINT}"

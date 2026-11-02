@@ -72,7 +72,7 @@ test('messaging is optimistic, retains draft on failure and does not refetch aft
 
 test('authentication and RBAC stay server-enforced with request-scoped memoization', () => {
   assert.match(src('src/lib/auth.ts'),/export const actor = cache\(/);
-  assert.match(src('src/lib/access.ts'),/const coordinatorOverrides = cache\(/);
+  assert.match(src('src/lib/access.ts'),/const userGrants = cache\(/);
   for (const file of ['app/(portal)/admin/layout.tsx','app/(portal)/coordinator/layout.tsx','app/(portal)/client/layout.tsx']) {
     assert.match(src(file),/await actor\(\)/);
   }

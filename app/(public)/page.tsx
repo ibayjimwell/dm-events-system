@@ -4,14 +4,14 @@ import { asc, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { packages } from '@/db/schema';
 import { actor } from '@/lib/auth';
+import { portalHome } from '@/lib/portalHome';
 import { currentSite } from '@/models/read';
 import HomeShowcase from '@/components/marketing/HomeShowcase';
 
 export const dynamic = 'force-dynamic';
 export default async function Home() {
   const user = await actor();
-  if (user?.role === 'ADMIN') redirect('/admin');
-  if (user?.role === 'COORDINATOR') redirect('/coordinator');
+  if (user?.role === 'ADMIN' || user?.role === 'COORDINATOR') redirect(await portalHome(user));
   if (!user && (await cookies()).get('dm_staff_portal')?.value === '1') redirect('/login');
 
   const [site, featured] = await Promise.all([

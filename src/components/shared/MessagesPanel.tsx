@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, CalendarDays, Check, CheckCheck, ImagePlus, LockKeyhole,
-  MessageCircle, Paperclip, Search, Send, X,
+  MessageCircle, Paperclip, Search, Send, X, Archive, ArchiveRestore, Trash2, RotateCcw, AlertTriangle,
 } from 'lucide-react';
 import { api, json } from '@/api-client/http';
 import { subscribeToChatEvents } from '@/lib/live-events';
@@ -18,7 +18,7 @@ type Thread = {
   id: string; reference: string; clientName: string; eventType: string;
   eventDate: string; status: string; source: string;
   latest: { body: string; hasAttachment: boolean; senderId: string; createdAt: string } | null;
-  unread: number;
+  unread: number; deletedAt: string | null; purgeAfter: string | null;
 };
 type Message = {
   id: string; bookingId: string; senderId: string; senderName: string;
@@ -61,6 +61,9 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
   const requestedBooking = search.get('booking') || '';
   const [selected, setSelected] = useState(requestedBooking);
   const [searchTerm, setSearchTerm] = useState('');
+  const [view, setView] = useState<'inbox'|'archived'|'trash'>('inbox');
+  const [actionBusy, setActionBusy] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [assetId, setAssetId] = useState('');
   const [fileLabel, setFileLabel] = useState('');
@@ -85,12 +88,12 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
   const refreshConversationRef = useRef(false);
 
 
-  const all = useLiveQuery(() => api<{ threads: Thread[]; viewerId: string }>('/api/messages/threads'), [],
-    { subscribeToChanges: false, refreshOnFocus: false, cacheKey: `${role}:/api/messages/threads`, staleTimeMs: 12_000 });
-  const conversation = useLiveQuery<Conversation>(() => selected
+  const all = useLiveQuery(() => api<{ threads: Thread[]; viewerId: string }>(`/api/messages/threads?view=${view}`), [view],
+    { subscribeToChanges: false, refreshOnFocus: false, cacheKey: `${role}:/api/messages/threads?view=${view}`, staleTimeMs: 12_000 });
+  const conversation = useLiveQuery<Conversation>(() => selected && view !== 'trash'
     ? api(`/api/messages?bookingId=${encodeURIComponent(selected)}`)
     : Promise.resolve({ viewerId: '', messages: [], reads: [], typing: [] }), [selected],
-    { subscribeToChanges: false, refreshOnFocus: false, cacheKey: `${role}:/api/messages?bookingId=${selected}`, staleTimeMs: 12_000 });
+    { subscribeToChanges: false, refreshOnFocus: false, cacheKey: `${role}:/api/messages?bookingId=${selected}&view=${view}`, staleTimeMs: 12_000 });
   const threads = all.data?.threads || [];
   const active = threads.find(t => t.id === selected);
   const text = drafts[selected] || '';
@@ -103,7 +106,8 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
       return;
     }
     if (threads.length && !threads.some(t => t.id === selected)) setSelected(threads[0].id);
-  }, [requestedBooking, threads, selected]);
+    if (!threads.length && all.data) setSelected('');
+  }, [requestedBooking, threads, selected, all.data]);
 
   useEffect(() => {
     setAssetId(''); setFileLabel(''); setError(''); setTypedBy({});
@@ -170,7 +174,7 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
   }, [all.refresh, conversation.refresh]);
 
   const markRead = useCallback(async () => {
-    if (!selected || !conversation.data || document.visibilityState !== 'visible') return;
+    if (view === 'trash' || !selected || !conversation.data || document.visibilityState !== 'visible') return;
     const ownRead = conversation.data.reads.find(r => r.userId === viewerId)?.lastReadAt;
     const lastIncoming = [...conversation.data.messages].reverse().find(m => m.senderId !== viewerId);
     if (!lastIncoming || (ownRead && new Date(ownRead).getTime() >= new Date(lastIncoming.createdAt).getTime())) return;
@@ -188,7 +192,7 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
       } : prev);
     } catch { /* Already-loaded conversation remains usable if a receipt fails. */ }
     finally { readBusyRef.current.delete(selected); }
-  }, [selected, viewerId, role, conversation.data, all.setData, conversation.setData]);
+  }, [selected, viewerId, role, view, conversation.data, all.setData, conversation.setData]);
 
   useEffect(() => {
     void markRead();
@@ -231,6 +235,21 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
     }
     if (stopTypingRef.current) clearTimeout(stopTypingRef.current);
     stopTypingRef.current = setTimeout(() => { void signalTyping(selected, false); typingPulseRef.current = 0; }, 2900);
+  }
+  async function changeThreadState(action: 'ARCHIVE'|'UNARCHIVE'|'DELETE'|'RESTORE') {
+    if (!selected || actionBusy) return;
+    setActionBusy(true); setError('');
+    try {
+      await api(`/api/messages/threads/${encodeURIComponent(selected)}`, json('PATCH', { action }));
+      setDeleteConfirm(false);
+      // Move the thread into the appropriate view, showing newly archived/deleted chats.
+      const target = action === 'ARCHIVE' ? 'archived' : action === 'DELETE' ? 'trash' : 'inbox';
+      setSelected('');
+      setMobileThread(false);
+      if (target === 'trash' && role === 'CLIENT') setView('inbox');
+      else setView(target);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not update conversation.'); }
+    finally { setActionBusy(false); }
   }
   function switchThread(id: string) {
     if (id !== selected && selected && text.trim()) void signalTyping(selected, false);
@@ -322,6 +341,11 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
             <h2>Inbox</h2>{unreadTotal > 0 && <span className={styles.totalCount}>{unreadTotal}</span>}
           </div>
           <p>Stay connected with every booking.</p>
+          <nav className={styles.folderTabs} aria-label="Conversation folders">
+            {([['inbox','Inbox'],['archived','Archived'],...(role === 'CLIENT' ? [] : [['trash','Recently deleted']])] as Array<[typeof view,string]>).map(([folder,label]) =>
+              <button type="button" key={folder} className={`${styles.folderTab} ${view===folder?styles.folderTabActive:''}`} aria-current={view===folder?'page':undefined}
+                onClick={() => {setView(folder);setSelected('');setMobileThread(false);setSearchTerm('');setError('');}}>{label}</button>)}
+          </nav>
           <label className={styles.search}><Search size={18}/><input aria-label="Search by client name" placeholder="Search client name" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/></label>
         </div>
         <div className={styles.threadList}>
@@ -337,12 +361,12 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
               <span className={styles.threadInfo}>
                 <span className={styles.threadTop}><strong>{title}</strong><small>{thread.latest?.createdAt ? formatDate(thread.latest.createdAt) : ''}</small></span>
                 <span className={styles.reference}>{thread.reference} · {thread.eventType}</span>
-                <span className={styles.preview}>{latestText(thread)}</span>
+                <span className={styles.preview}>{view==='trash' ? `Permanently deleted ${thread.purgeAfter ? formatDate(thread.purgeAfter) : 'after 30 days'}` : latestText(thread)}</span>
               </span>
               {thread.unread > 0 && <span className={styles.unread} aria-label={`${thread.unread} unread messages`}>{thread.unread > 99 ? '99+' : thread.unread}</span>}
             </button>;
           })}
-          {!all.loading && !filtered.length && <div className={styles.emptyInbox}><MessageCircle size={30}/><strong>No conversations found</strong><p>{searchTerm ? 'Try searching by client name.' : 'Your booking conversations will appear here.'}</p></div>}
+          {!all.loading && !filtered.length && <div className={styles.emptyInbox}><MessageCircle size={30}/><strong>No conversations found</strong><p>{searchTerm ? 'Try searching by client name.' : view === 'archived' ? 'Archived conversations will appear here.' : view === 'trash' ? 'No chats are awaiting permanent deletion.' : 'Your booking conversations will appear here.'}</p></div>}
         </div>
         <footer className={styles.sidebarFooter}><LockKeyhole size={15}/> Private, booking-linked messaging</footer>
       </aside>
@@ -354,13 +378,21 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
             <div className={styles.chatHeading}><strong>{role === 'CLIENT' ? 'DM Events Team' : active.clientName}</strong>
               <span>{active.reference} <span className={styles.dot}>·</span> {active.eventType}</span></div>
             <span className={styles.status}>{active.status.toLowerCase()}</span>
+            <div className={styles.chatActions}>
+              {view === 'trash' ? <button type="button" className={styles.actionButton} onClick={() => void changeThreadState('RESTORE')} disabled={actionBusy} title="Restore chat" aria-label="Restore chat"><RotateCcw size={17}/><span>Restore</span></button> : <>
+                <button type="button" className={styles.actionButton} onClick={() => void changeThreadState(view === 'archived' ? 'UNARCHIVE' : 'ARCHIVE')} disabled={actionBusy} aria-label={view === 'archived' ? 'Unarchive chat' : 'Archive chat'} title={view === 'archived' ? 'Unarchive' : 'Archive'}>{view === 'archived' ? <ArchiveRestore size={17}/> : <Archive size={17}/>}<span>{view === 'archived' ? 'Unarchive' : 'Archive'}</span></button>
+                {role !== 'CLIENT' && <button type="button" className={`${styles.actionButton} ${styles.dangerButton}`} onClick={() => setDeleteConfirm(true)} disabled={actionBusy} aria-label="Delete chat"><Trash2 size={17}/><span>Delete</span></button>}
+              </>}
+            </div>
             {canOpenBooking && <Link href={role === 'CLIENT' ? `/client/bookings/${active.id}` : role === 'ADMIN' ? `/admin/bookings/${active.id}` : `/coordinator/requests/${active.id}`}
               className={styles.detailLink} aria-label="View booking details" title="View booking details">
               <CalendarDays size={18}/><span className={styles.detailText}>Booking</span>
             </Link>}
           </header>
+          {view === 'trash' && error && <p role="alert" className={styles.inlineError}>{error}</p>}
+          {view === 'trash' && <div className={styles.walkin} role="status">Deleted for everyone. Restore before {active.purgeAfter ? formatDate(active.purgeAfter) : 'the 30-day deadline'} or all messages and associated images will be permanently removed.</div>}
           {active.source === 'WALK_IN' && <div className={styles.walkin}>Walk-in booking: these are internal staff notes, not messages delivered to the client.</div>}
-          <div className={styles.messageScroll} ref={messageScrollRef} aria-live="polite" aria-label="Messages" role="log">
+          {view === 'trash' ? <div className={styles.selectConversation}><Trash2 size={40}/><h3>Recently deleted</h3><p>This conversation is unavailable to all participants. Restore it within 30 days to bring back the messages.</p></div> : <div className={styles.messageScroll} ref={messageScrollRef} aria-live="polite" aria-label="Messages" role="log">
             {conversation.loading && !conversation.data && <div className={styles.loadingMessages}><ListSkeleton rows={4} label="Loading messages"/></div>}
             {conversation.error && <p role="alert" className={styles.inlineError}>{conversation.error}</p>}
             {!conversation.loading && !messages.length && <div className={styles.emptyConversation}><div className={styles.emptyArt}><MessageCircle size={34}/></div><h3>A conversation starts here</h3><p>Share questions, event details and updates in this secure space.</p></div>}
@@ -391,9 +423,9 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
               </div>;
             })}
             {othersTyping && <div className={styles.typing}><span className={styles.typingDots}><i/><i/><i/></span><span>{role === 'CLIENT' ? 'DM Events is typing' : 'Someone is typing'}…</span></div>}
-          </div>
-          {error && <div className={styles.composeError} role="alert">{error}<button type="button" aria-label="Dismiss error" onClick={() => setError('')}><X size={15}/></button></div>}
-          <form className={styles.composer} onSubmit={send}>
+          </div>}
+          {view !== 'trash' && error && <div className={styles.composeError} role="alert">{error}<button type="button" aria-label="Dismiss error" onClick={() => setError('')}><X size={15}/></button></div>}
+          {view !== 'trash' && <form className={styles.composer} onSubmit={send}>
             {assetId && <div className={styles.uploadChip}><ImagePlus size={16}/><span>{fileLabel || 'Attached photo'}</span><button type="button" onClick={() => { setAssetId(''); setFileLabel(''); }} aria-label="Remove attached photo"><X size={16}/></button></div>}
             <div className={styles.composeRow}>
               <label className={styles.attach} title="Attach an event photo"><Paperclip size={21}/><span className="sr-only">Attach photo</span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadFile} disabled={uploading || sending} hidden/></label>
@@ -401,7 +433,15 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
               <button type="submit" className={styles.sendButton} disabled={sending || uploading || (!text.trim() && !assetId)} aria-label={sending ? 'Sending message' : 'Send message'}><Send size={19}/></button>
             </div>
             <div className={styles.composeHint}><span>{uploading ? 'Uploading photo…' : sending ? 'Sending securely…' : 'Enter to send · Shift + Enter for a new line'}</span><span>{text.length}/3000</span></div>
-          </form>
+          </form>}
+          {deleteConfirm && role !== 'CLIENT' && <div className={styles.dialogBackdrop} role="presentation" onClick={() => setDeleteConfirm(false)}>
+            <div className={styles.dialog} role="alertdialog" aria-modal="true" aria-labelledby="delete-chat-title" aria-describedby="delete-chat-description" onClick={e => e.stopPropagation()}>
+              <AlertTriangle size={29} aria-hidden="true"/>
+              <h3 id="delete-chat-title">Delete conversation for everyone?</h3>
+              <p id="delete-chat-description">The chat will disappear for the client and all staff immediately. Authorized staff can restore it within 30 days. After 30 days, its messages and attachments are permanently deleted by the scheduled retention job. Booking records remain intact.</p>
+              <div className={styles.dialogButtons}><button type="button" disabled={actionBusy} onClick={() => setDeleteConfirm(false)}>Cancel</button><button type="button" className={styles.deleteButton} disabled={actionBusy} onClick={() => void changeThreadState('DELETE')}>{actionBusy ? 'Deleting…' : 'Delete chat'}</button></div>
+            </div>
+          </div>}
         </> : <div className={styles.selectConversation}><MessageCircle size={40}/><h3>Select a conversation</h3><p>Choose an event booking to view its messages.</p></div>}
       </section>
     </div>

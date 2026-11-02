@@ -6,7 +6,7 @@ import { tryImmediateDelivery } from "@/lib/notifications/worker";
 import { route, ok, readJson, HttpError } from "@/lib/http";
 import { requireActor, audit, checkAuthLimit } from "@/lib/auth";
 import { db } from "@/db";
-import { messages, messageReads, mediaAssets, messageTyping, users } from "@/db/schema";
+import { messages, messageReads, mediaAssets, messageTyping, users, messageThreadPreferences, messageThreadDeletions } from "@/db/schema";
 import { eq, and, gt, ne } from "drizzle-orm";
 import { readConversation } from "@/models/read";
 import { requireMessageBooking } from "@/models/messaging";
@@ -53,6 +53,10 @@ export const POST = route(async (req) => {
   if (u.role !== "CLIENT")
     await checkAuthLimit("staff-messages:" + u.id, 30);
   const [m] = await db.transaction(async (tx) => {
+    await tx.select({ id: bookings.id }).from(bookings).where(eq(bookings.id, v.bookingId)).for('update');
+    const [deleted] = await tx.select({ bookingId: messageThreadDeletions.bookingId })
+      .from(messageThreadDeletions).where(eq(messageThreadDeletions.bookingId, v.bookingId));
+    if (deleted) throw new HttpError(410, 'Conversation was deleted; ask staff to restore it within 30 days');
     const [newMessage] = await tx
       .insert(messages)
       .values({
@@ -62,6 +66,8 @@ export const POST = route(async (req) => {
         assetId: v.assetId || null,
       })
       .returning();
+    await tx.update(messageThreadPreferences).set({ archivedAt: null })
+      .where(eq(messageThreadPreferences.bookingId, v.bookingId));
     if (v.assetId)
       await tx
         .update(mediaAssets)

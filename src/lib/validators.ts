@@ -150,7 +150,7 @@ export const bookingInput = z.object({
   venue: z.string().trim().max(2000).default(''),
   venueLatitude: z.number().finite().min(-90).max(90).nullable().optional(),
   venueLongitude: z.number().finite().min(-180).max(180).nullable().optional(),
-  estimatedBudget: z.string().trim().regex(/^(?:0|[1-9]\d{0,8})(?:\.\d{1,2})?$/, 'Enter a PHP amount using numbers only, with up to two decimal places.').refine(value => Number(value) > 0, 'Estimated budget must be greater than zero.'),
+  estimatedBudget: z.string().trim().regex(/^(?:0|[1-9]\d{0,8})(?:\.\d{1,2})?$/, 'Enter a PHP amount using numbers only, with up to two decimal places.').refine(value => Number(value) >= 5000, 'Minimum estimated budget is ₱5,000.'),
   packageId: z.string().uuid().nullable().optional(),
   preferredTheme: z.string().max(400).default(''),
   colorPalette: z.string().max(400).default(''),
@@ -172,7 +172,7 @@ export const messageInput = messageReadInput
 export const statusInput = z.object({
   status: z.enum(['TENTATIVE', 'HELD', 'CONFIRMED', 'CANCELLED']),
   note: z.string().max(3000).optional(),
-  bookedValue: z.number().finite().nonnegative().max(999999999)
+  bookedValue: z.number().finite().min(5000, 'Agreed booking value must be at least ₱5,000.').max(999999999)
     .refine(value => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6,
       'Use at most two decimal places for Philippine peso amounts.')
     .nullable().optional(),

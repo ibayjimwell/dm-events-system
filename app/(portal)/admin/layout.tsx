@@ -23,9 +23,10 @@ export default async function AdminLayout({
     "settings.manage",
     "backups.manage",
     "users.manage",
+    "messages.staff",
   ] as const;
   if (!adminModules.some((p) => permissions.has(p)))
-    redirect(user.role === "CLIENT" ? "/client" : "/coordinator");
+    redirect("/access-denied");
   return (
     <PortalMessengerFrame role={user.role} permissions={[...permissions]} footerLabel="ADMIN MODULE">
       {children}

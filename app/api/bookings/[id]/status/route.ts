@@ -29,8 +29,8 @@ export const POST = route(async (req, ctx: { params: Promise<{ id: string }> }) 
         throw new HttpError(409, 'A confirmed event may be edited or cancelled, but cannot be silently moved back to inquiry/hold.');
       }
       const newValue = input.bookedValue === undefined ? before.bookedValue : input.bookedValue;
-      if (input.status === 'CONFIRMED' && (newValue === null || Number(newValue) <= 0)) {
-        throw new HttpError(400, 'Set a positive agreed booking value before confirming an event.');
+      if (input.status === 'CONFIRMED' && (newValue === null || Number(newValue) < 5000)) {
+        throw new HttpError(400, 'Set an agreed booking value of at least ₱5,000 before confirming an event.');
       }
       const note = input.note === undefined ? before.reviewNote : input.note.trim();
       const valueChanged = input.bookedValue !== undefined &&

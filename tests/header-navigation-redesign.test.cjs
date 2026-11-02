@@ -21,7 +21,7 @@ test('all role menus remain permission-filtered, including delegated modules', (
   assert.match(nav, /allowed\.has\(item\.permission\)/);
   assert.match(nav, /role === 'ADMIN'/);
   assert.match(nav, /bookings\.create\.walkin/);
-  assert.match(nav, /role === 'CLIENT' \? '\/client'/);
+  assert.match(nav, /role === 'CLIENT' \? \(firstGranted\(clientLinks\)/);
 });
 
 test('active navigation does not highlight root dashboard and More together', () => {

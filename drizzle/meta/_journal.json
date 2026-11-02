@@ -71,6 +71,20 @@
       "when": 1793500000000,
       "tag": "0009_package_image_gallery",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793670000000,
+      "tag": "0010_mother_admin_module_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793680000000,
+      "tag": "0011_budget_calendar_chat_retention",
+      "breakpoints": true
     }
   ]
 }

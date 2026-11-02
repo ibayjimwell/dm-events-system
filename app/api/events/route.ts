@@ -56,6 +56,16 @@ export async function GET(req: Request) {
         write('change', { kind: 'messages' });
       });
       if (canChat) {
+        channel.on('postgres_changes', { schema: 'public', table: 'message_thread_preferences', event: '*' }, payload => {
+          const row = (payload as RealtimeRow).new ?? (payload as RealtimeRow).old;
+          if (row?.user_id !== user.id || !allowedChatBooking(row?.booking_id)) return;
+          write('chat', { kind: 'message', bookingId: row?.booking_id });
+        });
+        channel.on('postgres_changes', { schema: 'public', table: 'message_thread_deletions', event: '*' }, payload => {
+          const row = (payload as RealtimeRow).new ?? (payload as RealtimeRow).old;
+          if (!allowedChatBooking(row?.booking_id)) return;
+          write('chat', { kind: 'message', bookingId: row?.booking_id });
+        });
         channel.on('postgres_changes', { schema: 'public', table: 'message_reads', event: '*' }, payload => {
           const row = (payload as RealtimeRow).new;
           if (!allowedChatBooking(row?.booking_id)) return;

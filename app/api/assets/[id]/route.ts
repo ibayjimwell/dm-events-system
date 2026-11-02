@@ -8,6 +8,7 @@ import { db } from '@/db';
 
 import {
   mediaAssets,
+  messageThreadDeletions,
   bookings,
   packages,
   siteContent,
@@ -31,6 +32,13 @@ export const GET = route(
 
     if (!asset) {
       throw new HttpError(404, 'Image not found.');
+    }
+
+    // A deleted message attachment is not accessible to any participant during retention.
+    if (asset.kind === 'MESSAGE' && asset.bookingId) {
+      const [deleted] = await db.select({ bookingId: messageThreadDeletions.bookingId })
+        .from(messageThreadDeletions).where(eq(messageThreadDeletions.bookingId, asset.bookingId));
+      if (deleted) throw new HttpError(404, 'Image not found.');
     }
 
     const user = await actor();

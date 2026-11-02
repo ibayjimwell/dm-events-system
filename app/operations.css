@@ -82,3 +82,17 @@
 @media(max-width:700px) {.workspace-metrics {grid-template-columns:1fr 1fr;}.workspace-calendar {gap:3px;}.workspace-calendar__day{padding:6px;min-height:68px;border-radius:8px;}.workspace-calendar__day[aria-pressed="true"] {padding:5px;}.workspace-calendar__count{font-size:9px;}.workspace-calendar__number{height:23px;width:23px;font-size:11px;}}
 @media(max-width:470px) {.workspace-hero{border-radius:14px;padding:22px;}.workspace-metrics{grid-template-columns:1fr;}.workspace-calendar__day{min-height:54px;}.workspace-calendar__count{display:none;}}
 @media(prefers-reduced-motion:reduce) {.workspace-reveal{animation:none;}.workspace-action{transition:none;}.workspace-action:hover{transform:none;}}
+
+/* Filled calendar cells: confirmed > held > tentative > cancelled on mixed-status dates. */
+.workspace-calendar__day--CONFIRMED {background:#167449;color:#fff;border-color:#11633f;}
+.workspace-calendar__day--HELD {background:#2166a5;color:#fff;border-color:#18558b;}
+.workspace-calendar__day--TENTATIVE {background:#c78a25;color:#fff;border-color:#a76f17;}
+.workspace-calendar__day--CANCELLED {background:#a84a5a;color:#fff;border-color:#873748;}
+.workspace-calendar__day--CONFIRMED:hover,.workspace-calendar__day--CONFIRMED[aria-pressed="true"] {background:#0f5f39;color:white;}
+.workspace-calendar__day--HELD:hover,.workspace-calendar__day--HELD[aria-pressed="true"] {background:#174c82;color:white;}
+.workspace-calendar__day--TENTATIVE:hover,.workspace-calendar__day--TENTATIVE[aria-pressed="true"] {background:#a87520;color:white;}
+.workspace-calendar__day--CANCELLED:hover,.workspace-calendar__day--CANCELLED[aria-pressed="true"] {background:#853243;color:white;}
+.workspace-calendar__day[class*="workspace-calendar__day--"] .workspace-calendar__count {color:rgba(255,255,255,.9);}
+.workspace-calendar__day[class*="workspace-calendar__day--"].is-today .workspace-calendar__number {background:rgba(255,255,255,.23);color:white;}
+.workspace-calendar__day[class*="workspace-calendar__day--"][aria-pressed="true"] {outline:3px solid #102f4c;outline-offset:2px;border-color:white;}
+.workspace-calendar__legend {width:13px;height:13px;display:inline-block;border-radius:4px;flex-shrink:0;}

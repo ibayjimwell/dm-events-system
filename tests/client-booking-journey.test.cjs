@@ -46,10 +46,10 @@ test('post-login redirect accepts only the client booking destination', () => {
     '/client/book?next=https://evil.invalid', '/client/book?package=not-a-uuid',
     `/client/book?package=${id}&package=${id}`, '/client/book#fragment',
   ]) assert.equal(safeBookingDestination(attack), null, attack);
-  assert.match(auth, /result\.user\.role === 'ADMIN'/);
-  assert.match(auth, /next \?\? pendingBooking \?\? '\/client'/);
+  assert.match(auth, /result\.user\.role === 'CLIENT' && result\.home === '\/client'/);
+  assert.match(auth, /next \?\? pendingBooking \?\? result\.home/);
   assert.match(auth, /BOOKING_INTENT_KEY/);
-  assert.match(read('app/(public)/login/page.tsx'), /requested \?\? '\/client'/);
+  assert.match(read('app/(public)/login/page.tsx'), /requested \?\? home/);
 });
 
 test('other public booking CTAs preserve the booking destination through login', () => {

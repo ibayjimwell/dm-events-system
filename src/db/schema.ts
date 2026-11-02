@@ -50,6 +50,7 @@ export const users = pgTable(
     phone: varchar("phone", { length: 50 }),
     role: roles("role").notNull().default("CLIENT"),
     isActive: boolean("is_active").notNull().default(true),
+    isRootAdmin: boolean("is_root_admin").notNull().default(false),
     emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
     phoneVerifiedAt: timestamp("phone_verified_at", { withTimezone: true }),
     signupVerificationRequired: boolean("signup_verification_required").notNull().default(false),
@@ -58,6 +59,8 @@ export const users = pgTable(
   (t) => [
     uniqueIndex("users_email_unique").on(t.email),
     index("users_role_idx").on(t.role),
+    uniqueIndex("users_one_root_admin_idx").on(t.isRootAdmin).where(sql`${t.isRootAdmin} = true`),
+    check("users_root_role_check", sql`NOT ${t.isRootAdmin} OR ${t.role} = 'ADMIN'`),
   ],
 );
 export const sessions = pgTable(
@@ -201,6 +204,8 @@ export const bookings = pgTable(
     index("bookings_status_idx").on(t.status),
     index("bookings_confirmed_idx").on(t.confirmedAt),
     check("bookings_source_check", sql`${t.source} IN ('ONLINE','WALK_IN')`),
+    check("bookings_budget_minimum_check", sql`${t.estimatedBudget} ~ '^(0|[1-9][0-9]{0,8})(\.[0-9]{1,2})?$' AND ${t.estimatedBudget}::numeric >= 5000`),
+    check("bookings_booked_value_minimum_check", sql`(${t.bookedValue} IS NULL OR ${t.bookedValue} >= 5000) AND (${t.status} <> 'CONFIRMED' OR ${t.bookedValue} IS NOT NULL)`),
   ],
 );
 /** Immutable financial changes; monthly confirmation reporting must not rewrite history. */
@@ -265,6 +270,30 @@ export const messages = pgTable(
   },
   (t) => [index("messages_booking_date_idx").on(t.bookingId, t.createdAt)],
 );
+/** Per-user archived conversations, independent of other participants. */
+export const messageThreadPreferences = pgTable(
+  "message_thread_preferences",
+  {
+    bookingId: uuid("booking_id").notNull().references(() => bookings.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.bookingId, t.userId] }), index("message_thread_preferences_user_idx").on(t.userId)],
+);
+/** Staff-initiated chat deletion is shared: hide for everyone, allow restore for 30 days,
+ * then purge content and attachments. Keep a content-free tombstone after purge. */
+export const messageThreadDeletions = pgTable(
+  "message_thread_deletions",
+  {
+    bookingId: uuid("booking_id").primaryKey().references(() => bookings.id, { onDelete: "cascade" }),
+    deletedBy: uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }).notNull().defaultNow(),
+    purgeAfter: timestamp("purge_after", { withTimezone: true }).notNull(),
+    purgedAt: timestamp("purged_at", { withTimezone: true }),
+  },
+  (t) => [index("message_thread_deletions_purge_idx").on(t.purgeAfter)],
+);
+
 export const messageReads = pgTable(
   "message_reads",
   {

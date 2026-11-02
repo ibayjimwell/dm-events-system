@@ -238,15 +238,13 @@ export default function AuthForms({ mode }: { mode: Mode }) {
 
     try {
       if (mode === 'login') {
-        const result = await api<{ user: { role: string } }>(
+        const result = await api<{ user: { role: string }; home: string }>(
           '/api/auth/login',
           json('POST', { email, password })
         );
-        const destination = result.user.role === 'ADMIN'
-          ? '/admin'
-          : result.user.role === 'COORDINATOR'
-            ? '/coordinator'
-            : (next ?? pendingBooking ?? '/client');
+        const destination = result.user.role === 'CLIENT' && result.home === '/client'
+          ? (next ?? pendingBooking ?? result.home)
+          : result.home;
         // Consume the pending intent on any successful login, including staff login,
         // so it cannot unexpectedly affect a different session later.
         try { sessionStorage.removeItem(BOOKING_INTENT_KEY); } catch { /* Storage optional. */ }

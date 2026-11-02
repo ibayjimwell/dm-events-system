@@ -43,7 +43,8 @@ test('homepage sections are persisted in an additive SQL migration', () => {
   const journal = JSON.parse(read('drizzle/meta/_journal.json'));
   assert.ok(journal.entries.some(entry => entry.tag === '0006_public_homepage_content')); // New migrations can follow the CMS migration.
   assert.ok(journal.entries.some(entry => entry.tag === '0007_realtime_chat_presence'));
-  assert.equal(journal.entries.at(-1).tag, '0009_package_image_gallery');
+  assert.ok(journal.entries.some(entry => entry.tag === '0010_mother_admin_module_access'));
+  assert.equal(journal.entries.at(-1).tag, '0011_budget_calendar_chat_retention');
 });
 
 test('website content remains draft/publish gated and never exposes drafts to public users', () => {
@@ -66,8 +67,8 @@ test('public lists contain published packages and keep package intent through lo
   assert.match(details, /bookingDestination\(pkg\.id\)/);
   assert.match(details, /loginForBooking\(pkg\.id\)/);
   assert.match(card, /\/packages\/\$\{item\.id\}/);
-  assert.match(page, /if \(user\?\.role === 'ADMIN'\) redirect\('\/admin'\)/);
-  assert.match(page, /if \(user\?\.role === 'COORDINATOR'\) redirect\('\/coordinator'\)/);
+  assert.match(page, /redirect\(await portalHome\(user\)\)/);
+  assert.match(page, /user\?\.role === 'COORDINATOR'/);
 });
 
 test('signed HERO upload follows existing strict authorization and S3-independent receipt validation', () => {

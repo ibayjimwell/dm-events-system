@@ -4,6 +4,7 @@ import { users } from '@/db/schema';
 import { login } from '@/lib/validators';
 import { eq } from 'drizzle-orm';
 import { comparePassword, createSession, checkAuthLimit, clearAuthLimit, audit } from '@/lib/auth';
+import { portalHome } from '@/lib/portalHome';
 
 export const POST = route(async (req) => {
   const data = login.parse(await readJson(req));
@@ -39,5 +40,6 @@ export const POST = route(async (req) => {
   await clearAuthLimit(rateLimitKey);
   await createSession(user.id, user.role);
   await audit(user.id, 'LOGIN', 'user', user.id);
-  return ok({user:{id:user.id, fullName:user.fullName, email:user.email, role:user.role}});
+  return ok({user:{id:user.id, fullName:user.fullName, email:user.email, role:user.role},
+    home: await portalHome(user)});
 });

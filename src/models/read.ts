@@ -1,6 +1,6 @@
 import {requireMessageBooking} from '@/models/messaging';
-import {db} from '@/db';import {bookings,packages,users,bookingHistory,messages,messageReads,siteContent} from '@/db/schema';
-import {and,eq,desc,ne,gt,sql,asc} from 'drizzle-orm';import type {Actor} from '@/lib/auth';import {HttpError} from '@/lib/http';import {can} from '@/lib/access';
+import {db} from '@/db';import {bookings,packages,users,bookingHistory,messages,messageReads,messageThreadPreferences,messageThreadDeletions,siteContent} from '@/db/schema';
+import {and,eq,desc,ne,gt,sql,asc,isNull} from 'drizzle-orm';import type {Actor} from '@/lib/auth';import {HttpError} from '@/lib/http';import {can} from '@/lib/access';
 export async function readBookings(user:Actor){
  const query=db.select({id:bookings.id,reference:bookings.reference,clientId:bookings.clientId,clientName:sql<string>`coalesce(${users.fullName},${bookings.contactName})`,contactName:bookings.contactName,eventType:bookings.eventType,eventDate:bookings.eventDate,venue:bookings.venue,source:bookings.source,status:bookings.status,packageId:bookings.packageId,bookedValue:bookings.bookedValue,confirmedAt:bookings.confirmedAt,cancellationRequestedAt:bookings.cancellationRequestedAt,updatedAt:bookings.updatedAt,createdAt:bookings.createdAt}).from(bookings).leftJoin(users,eq(users.id,bookings.clientId));
  return await can(user,'bookings.view.all')?query.orderBy(desc(bookings.createdAt)):query.where(eq(bookings.clientId,user.id)).orderBy(desc(bookings.createdAt));
@@ -14,12 +14,14 @@ export async function readBooking(id:string,user:Actor){
 export async function readConversation(bookingId:string,user:Actor){await requireMessageBooking(bookingId,user);return db.select({id:messages.id,bookingId:messages.bookingId,senderId:messages.senderId,senderName:users.fullName,senderRole:users.role,body:messages.body,assetId:messages.assetId,createdAt:messages.createdAt}).from(messages).innerJoin(users,eq(users.id,messages.senderId)).where(eq(messages.bookingId,bookingId)).orderBy(asc(messages.createdAt));}
 export async function unreadCount(user:Actor){
  // One aggregate query; avoids one lookup and one count per booking in large systems.
- const hasAll = await can(user,'bookings.view.all');
+ const hasAll = user.role !== 'CLIENT' && await can(user,'messages.staff');
  const [row] = await db.select({count:sql<number>`count(*)::int`})
   .from(messages)
   .innerJoin(bookings,eq(bookings.id,messages.bookingId))
   .leftJoin(messageReads,and(eq(messageReads.bookingId,messages.bookingId),eq(messageReads.userId,user.id)))
-  .where(and(ne(messages.senderId,user.id),
+  .leftJoin(messageThreadDeletions,eq(messageThreadDeletions.bookingId,messages.bookingId))
+  .leftJoin(messageThreadPreferences,and(eq(messageThreadPreferences.bookingId,messages.bookingId),eq(messageThreadPreferences.userId,user.id)))
+  .where(and(isNull(messageThreadDeletions.bookingId),isNull(messageThreadPreferences.archivedAt),ne(messages.senderId,user.id),
    sql`(${messageReads.lastReadAt} IS NULL OR ${messages.createdAt} > ${messageReads.lastReadAt})`,
    hasAll?undefined:eq(bookings.clientId,user.id)));
  return row?.count||0;

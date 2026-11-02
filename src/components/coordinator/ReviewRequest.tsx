@@ -67,8 +67,8 @@ export default function ReviewRequest({ id, role, canUpdateStatus = true, canMes
   function previewSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setResult('');
     if (!booking || busy) return;
-    if (normalizedAmount !== null && (!Number.isFinite(normalizedAmount) || normalizedAmount < 0)) { setResult('Enter a valid nonnegative booking value.'); return; }
-    if (status === 'CONFIRMED' && (!normalizedAmount || normalizedAmount <= 0)) { setResult('A positive agreed booking value is required to confirm an event.'); return; }
+    if (normalizedAmount !== null && (!Number.isFinite(normalizedAmount) || normalizedAmount < 5000)) { setResult('Agreed booking value must be at least ₱5,000.'); return; }
+    if (status === 'CONFIRMED' && (!normalizedAmount || normalizedAmount < 5000)) { setResult('At least ₱5,000 is required to confirm an event.'); return; }
     if (!changes.length) { setResult('No changes to save.'); return; }
     setConfirmationOpen(true);
   }

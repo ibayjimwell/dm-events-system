@@ -197,7 +197,7 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
       if (!Number.isInteger(Number(form.guestCount)) || Number(form.guestCount) < 1 || Number(form.guestCount) > 100000) {
         setError('Enter an expected guest count between 1 and 100,000.'); return;
       }
-      if (!/^(?:0|[1-9]\d{0,8})(?:\.\d{1,2})?$/.test(form.estimatedBudget) || Number(form.estimatedBudget) <= 0) { setError('Enter a positive amount in PHP, numbers only (up to two decimals).'); return; }
+      if (!/^(?:0|[1-9]\d{0,8})(?:\.\d{1,2})?$/.test(form.estimatedBudget) || Number(form.estimatedBudget) < 5000) { setError('Minimum event budget is ₱5,000. Enter ₱5,000 or more.'); return; }
       if (form.venue.length > 2000 || form.estimatedBudget.length > 200) {
         setError('Please shorten the venue or budget details.'); return;
       }
@@ -417,8 +417,8 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
                   </div>
                   <div className={styles.field}>
                     <label htmlFor="booking-budget">Estimated budget (PHP) <span>*</span></label>
-                    <div className={styles.fieldIcon}><Wallet size={18}/><input id="booking-budget" className={inputClass} type="text" inputMode="decimal" pattern="(?:0|[1-9][0-9]{0,8})(?:\.[0-9]{1,2})?" maxLength={12} value={form.estimatedBudget} onChange={e => set('estimatedBudget', e.target.value.replace(/[^0-9.]/g, '').replace(/^(\d*\.?\d{0,2}).*$/, '$1'))} placeholder="e.g. 50000.00" required /></div>
-                    <small>Enter a single estimated amount in Philippine pesos, e.g. 50000.00. Final price is agreed with DM Events.</small>
+                    <div className={styles.fieldIcon}><Wallet size={18}/><input id="booking-budget" className={inputClass} type="text" inputMode="decimal" pattern="(?:0|[1-9][0-9]{0,8})(?:\.[0-9]{1,2})?" maxLength={12} value={form.estimatedBudget} onChange={e => set('estimatedBudget', e.target.value.replace(/[^0-9.]/g, '').replace(/^(\d*\.?\d{0,2}).*$/, '$1'))} placeholder="Minimum ₱5,000" required /></div>
+                    <small>Minimum ₱5,000. Enter numbers only (e.g. 5000.00). The final price is agreed with DM Events.</small>
                   </div>
                   <div className={styles.fullWidth}>
                     <button type="button" className={styles.optionalToggle} aria-expanded={showStyling} onClick={() => setShowStyling(open => !open)}>

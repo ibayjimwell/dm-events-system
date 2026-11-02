@@ -1,5 +1,5 @@
 import { db } from '@/db';
-import { bookings, users } from '@/db/schema';
+import { bookings, users, messageThreadDeletions } from '@/db/schema';
 import { can } from '@/lib/access';
 import type { Actor } from '@/lib/auth';
 import { HttpError } from '@/lib/http';
@@ -19,6 +19,9 @@ export async function requireMessageBooking(bookingId: string, actor: Actor) {
   } else if (!(await can(actor, 'messages.staff'))) {
     throw new HttpError(403, 'Messaging module not allowed');
   }
+  const [deleted] = await db.select({ bookingId: messageThreadDeletions.bookingId })
+    .from(messageThreadDeletions).where(eq(messageThreadDeletions.bookingId, bookingId)).limit(1);
+  if (deleted) throw new HttpError(410, 'This conversation was deleted. A staff member may restore it within 30 days.');
   return booking;
 }
 

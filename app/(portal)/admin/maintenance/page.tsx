@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { actor } from '@/lib/auth';
 import { permissionSet } from '@/lib/access';
 import { Boxes, Globe, Users, Settings, Database, BellRing, ArrowUpRight, ShieldCheck, SlidersHorizontal } from 'lucide-react';
@@ -16,10 +16,10 @@ const modules = [
 
 export default async function Maintenance() {
   const user = await actor();
-  if (!user) notFound();
+  if (!user) redirect('/login');
   const allowed = await permissionSet(user);
   const visible = modules.filter(module=>allowed.has(module.permission as Permission));
-  if (!visible.length) notFound();
+  if (!visible.length) redirect('/access-denied');
   return <main className="page-wrap page-space workspace">
     <section className="workspace-hero"><div className="workspace-hero__top"><div><span className="workspace-kicker"><SlidersHorizontal size={15}/> ADMINISTRATION STUDIO</span><h1>Manage your business workspace</h1><p>Keep your public website, packages, people, notifications and operational tools up to date—all in one place.</p></div></div></section>
     <div className="workspace-banner workspace-section"><ShieldCheck size={18} className="shrink-0"/><span>Only modules granted to your account are shown. Every update is also checked on the server.</span></div>

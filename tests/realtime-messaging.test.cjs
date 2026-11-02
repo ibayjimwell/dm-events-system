@@ -82,7 +82,8 @@ test('inbox, mobile chat, attachments, realtime refresh and admin replies remain
 test('migration journal includes new migration in sequence and no existing event data is dropped', () => {
   const journal = JSON.parse(source('drizzle/meta/_journal.json'));
   assert.ok(journal.entries.some(entry => entry.tag === '0007_realtime_chat_presence'));
-  assert.equal(journal.entries.at(-1).tag, '0009_package_image_gallery');
+  assert.ok(journal.entries.some(entry => entry.tag === '0010_mother_admin_module_access'));
+  assert.equal(journal.entries.at(-1).tag, '0011_budget_calendar_chat_retention');
   const sql = source('drizzle/0007_realtime_chat_presence.sql');
   assert.match(sql, /CREATE TABLE IF NOT EXISTS public\.message_typing/);
   assert.doesNotMatch(sql, /DROP TABLE|TRUNCATE|DELETE FROM/i);
