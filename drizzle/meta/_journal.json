@@ -85,6 +85,20 @@
       "when": 1793680000000,
       "tag": "0011_budget_calendar_chat_retention",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793760000000,
+      "tag": "0012_completed_booking_feedback",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793820000000,
+      "tag": "0013_backup_history_schedule",
+      "breakpoints": true
     }
   ]
 }

@@ -9,8 +9,8 @@ const modules = [
   { title:'Event packages',detail:'Curate, organize and publish the packages clients can explore.',href:'/admin/maintenance/packages',permission:'packages.manage',Icon:Boxes,category:'CLIENT EXPERIENCE' },
   { title:'Website content',detail:'Edit your homepage, published details and privacy information.',href:'/admin/maintenance/content',permission:'content.manage',Icon:Globe,category:'CLIENT EXPERIENCE' },
   { title:'Accounts & permissions',detail:'Manage staff access, account status and module-level authorization.',href:'/admin/maintenance/users',permission:'users.manage',Icon:Users,category:'PEOPLE & ACCESS' },
-  { title:'Cloudflare R2 backups',detail:'Queue an encrypted database backup, check GitHub runner configuration, and inspect backup history.',href:'/admin/maintenance/settings?tab=backups',permission:'backups.manage',Icon:Database,category:'SYSTEM OPERATIONS' },
-  { title:'System settings',detail:'Control backup policy and operational configuration.',href:'/admin/maintenance/settings',permission:'settings.manage',Icon:Settings,category:'SYSTEM OPERATIONS' },
+  { title:'Database backups',detail:'Review backup history and manage automatic schedules.',href:'/admin/maintenance/settings?tab=backups',permission:'backups.manage',Icon:Database,category:'SYSTEM OPERATIONS' },
+  { title:'System settings',detail:'Read backup and data protection instructions.',href:'/admin/maintenance/settings',permission:'settings.manage',Icon:Settings,category:'SYSTEM OPERATIONS' },
   { title:'Email & SMS delivery',detail:'Check notification delivery, retry failures, and test email connectivity.',href:'/admin/maintenance/notifications',permission:'settings.manage',Icon:BellRing,category:'SYSTEM OPERATIONS' },
 ] as const;
 

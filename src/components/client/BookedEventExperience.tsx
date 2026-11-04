@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { api, json } from '@/api-client/http';
 import useUnsavedChangesGuard from '@/hooks/useUnsavedChangesGuard';
+import ClientServiceFeedback from '@/components/client/ClientServiceFeedback';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { DetailSkeleton } from '@/components/ui/LoadingSkeleton';
 import BookingChangeDialog, { type BookingChange } from '@/components/ui/BookingChangeDialog';
@@ -80,6 +81,12 @@ const statusInfo: Record<string, StatusInfo> = {
     next: 'Review the event plan and coordinate any remaining details with our team before your event day.',
     stage: 2,
   },
+  COMPLETED: {
+    eyebrow: 'EVENT COMPLETED', headline: 'Thank you for celebrating with DM Events.',
+    explanation: 'Your event has been marked completed by the DM Events team.',
+    next: 'Rate our service and share feedback below. Your review helps us improve and helps other clients plan their celebrations.',
+    stage: 3,
+  },
   CANCELLED: {
     eyebrow: 'CANCELLED', headline: 'This event request is closed.',
     explanation: 'Your booking has been cancelled and is no longer active.',
@@ -91,6 +98,7 @@ const milestones = [
   { title: 'Request submitted', detail: 'Booking received' },
   { title: 'Date held', detail: 'Date reserved' },
   { title: 'Confirmed', detail: 'Event secured' },
+  { title: 'Completed', detail: 'Event delivered' },
 ];
 
 function shown(value: string | number | null | undefined, fallback = 'To be confirmed') {
@@ -229,7 +237,7 @@ export default function BookedEventExperience({ id }: { id: string }) {
 
   async function submitCancellation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || !booking || booking.status === 'CANCELLED' || booking.cancellationRequestedAt) return;
+    if (busy || !booking || ['CANCELLED', 'COMPLETED'].includes(booking.status) || booking.cancellationRequestedAt) return;
     setBusy(true); setFeedback(null); setSavedChanges([]);
     try {
       const response = await api<{ message: string }>(`/api/bookings/${id}/cancel`, json('POST', { reason: cancelReason.trim() }));
@@ -296,6 +304,7 @@ export default function BookedEventExperience({ id }: { id: string }) {
           <a href="#event-package">Package</a>
           <a href="#event-styling">Styling & notes</a>
           <a href="#event-activity">Updates</a>
+          {booking.status === 'COMPLETED' && <a href="#service-feedback">Rate our service</a>}
         </nav>
 
         {error && <div className={s.feedbackError} role="alert"><AlertCircle size={20}/><span>Could not refresh this booking: {error}</span><button onClick={() => void refresh()} type="button">Retry</button></div>}
@@ -309,6 +318,8 @@ export default function BookedEventExperience({ id }: { id: string }) {
           </div>
           <button type="button" onClick={() => { setFeedback(null); setSavedChanges([]); }} aria-label="Dismiss notification"><X size={18}/></button>
         </div>}
+
+        {booking.status === 'COMPLETED' && <ClientServiceFeedback bookingId={booking.id} />}
 
         <div className={s.contentGrid}>
           <div className={s.mainColumn}>
@@ -413,7 +424,8 @@ export default function BookedEventExperience({ id }: { id: string }) {
 
             <section className={s.sideCard}>
               <h3><ShieldCheck size={20}/> Cancellation request</h3>
-              {booking.status === 'CANCELLED' ? <p className={s.cancelledNotice}><AlertCircle size={17}/> Booking cancelled.</p>
+              {booking.status === 'COMPLETED' ? <p className={s.sideIntro}>This event has been completed. Cancellation is no longer available.</p>
+                : booking.status === 'CANCELLED' ? <p className={s.cancelledNotice}><AlertCircle size={17}/> Booking cancelled.</p>
                 : booking.cancellationRequestedAt ? <div className={s.pendingNotice}><AlertCircle size={17}/><div><strong>Awaiting team review</strong><p>Your booking stays {booking.status.toLowerCase()} until reviewed.</p>{booking.cancellationReason && <p>Reason: {booking.cancellationReason}</p>}</div></div>
                   : <>
                     <p className={s.sideIntro}>Need to change your plans? Request a review; your date won't be released automatically.</p>

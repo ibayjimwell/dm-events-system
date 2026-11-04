@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { loginForBooking } from '@/lib/bookingNavigation';
-import { ArrowDown, ArrowRight, ArrowUpRight, CalendarDays, CheckCircle2, MessageCircle, Sparkles } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUpRight, CalendarDays, CheckCircle2, MessageCircle, Sparkles, Star, Quote } from 'lucide-react';
 import PackageShowcaseCard, { type PublicPackage } from './PackageShowcaseCard';
 import { normalizeHomepage } from '@/lib/sitePresentation';
+import type { PublicServiceReview } from '@/lib/serviceFeedback';
 
 export type HomepageSite = {
   heroTitle: string;
@@ -14,9 +15,10 @@ export type HomepageSite = {
 };
 const featureIcons = [Sparkles, CalendarDays, MessageCircle] as const;
 
-export default function HomeShowcase({ site, featured, preview = false }: {
+export default function HomeShowcase({ site, featured, feedback, preview = false }: {
   site: HomepageSite;
   featured: PublicPackage[];
+  feedback?: { reviews: PublicServiceReview[]; count: number; average: number };
   preview?: boolean;
 }) {
   const h = normalizeHomepage(site.homepage);
@@ -50,6 +52,21 @@ export default function HomeShowcase({ site, featured, preview = false }: {
       <div className="dm-featured__head"><div className="dm-section-heading"><p className="dm-eyebrow"><span className="dm-line" />{h.packagesEyebrow}</p><h2 id="dm-featured-title">{h.packagesTitle}</h2><p>{h.packagesBody}</p></div><Link className="dm-text-link" href="/packages">View all packages <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
       {featured.length ? <div className="dm-showcase-grid">{featured.slice(0,3).map((item,i)=><PackageShowcaseCard key={item.id} item={item} index={i} />)}</div> : <div className="dm-empty-packages"><Sparkles size={28} aria-hidden="true" /><h3>Something wonderful is taking shape.</h3><p>Our packages are being prepared. You can still share your event idea with us.</p><Link className="dm-button dm-button--dark" href={loginForBooking()}>Start an inquiry <ArrowRight size={16} /></Link></div>}
     </section>
+
+    {feedback && feedback.reviews.length > 0 && <section className="dm-reviews" aria-labelledby="dm-reviews-title">
+      <div className="dm-marketing__container">
+        <div className="dm-reviews__heading"><div><p className="dm-eyebrow"><span className="dm-line"/>REAL CLIENT EXPERIENCES</p>
+          <h2 id="dm-reviews-title">Celebrations, in their words.</h2>
+          <p>Thoughts shared by clients after their DM Events celebrations.</p></div>
+          <div className="dm-reviews__summary"><Star size={24} fill="currentColor"/><strong>{feedback.average.toFixed(1)} / 5</strong><span>From {feedback.count} published {feedback.count === 1 ? 'review' : 'reviews'}</span></div>
+        </div>
+        <div className="dm-reviews__grid">{feedback.reviews.map((item,index)=><article className="dm-reviews__card" key={`${item.createdAt}-${index}`}>
+          <Quote className="dm-reviews__quote" size={30} aria-hidden="true"/>
+          <div className="dm-reviews__stars" aria-label={`${item.rating} out of 5 stars`}>{[1,2,3,4,5].map(n=><Star key={n} size={17} fill={n<=item.rating?'currentColor':'none'} aria-hidden="true" />)}</div>
+          <blockquote>{item.comment}</blockquote><p className="dm-reviews__verified"><CheckCircle2 size={15}/> Verified DM Events client</p>
+        </article>)}</div>
+      </div>
+    </section>}
 
     <section className="dm-journey" aria-labelledby="dm-journey-title"><div className="dm-marketing__container dm-journey__layout"><div><p className="dm-eyebrow dm-eyebrow--light"><span className="dm-line" />{h.stepsEyebrow}</p><h2 id="dm-journey-title">{h.stepsTitle}</h2><p className="dm-journey__note">Your event journey, organized from the beginning.</p></div><div className="dm-journey__steps">{h.steps.map((step,i)=><div className="dm-journey__step" key={i}><span className="dm-journey__index">0{i+1}</span><div><h3>{step.title}</h3><p>{step.description}</p></div><CheckCircle2 size={19} aria-hidden="true" /></div>)}</div></div></section>
 

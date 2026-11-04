@@ -27,7 +27,7 @@ export const PATCH = route(async (req, ctx: { params: Promise<{ id: string }> })
   const result = await db.transaction(async tx => {
     const [booking] = await tx.select().from(bookings).where(eq(bookings.id, id)).for('update');
     if (!booking) throw new HttpError(404, 'Booking not found');
-    if (booking.status === 'CANCELLED') throw new HttpError(409, 'A cancelled booking cannot be scheduled.');
+    if (booking.status === 'CANCELLED' || booking.status === 'COMPLETED') throw new HttpError(409, 'A closed booking cannot be rescheduled.');
     if (booking.updatedAt.toISOString() !== input.expectedUpdatedAt) {
       throw new HttpError(409, 'This booking changed since it was loaded. Refresh and review the schedule before saving.');
     }

@@ -24,6 +24,7 @@ export const statuses = pgEnum("booking_status", [
   "TENTATIVE",
   "HELD",
   "CONFIRMED",
+  "COMPLETED",
   "CANCELLED",
 ]);
 export const mediaKinds = pgEnum("media_kind", [
@@ -208,6 +209,29 @@ export const bookings = pgTable(
     check("bookings_booked_value_minimum_check", sql`(${t.bookedValue} IS NULL OR ${t.bookedValue} >= 5000) AND (${t.status} <> 'CONFIRMED' OR ${t.bookedValue} IS NOT NULL)`),
   ],
 );
+/** One client-authored service review per completed online booking. */
+export const bookingServiceFeedback = pgTable(
+  "booking_service_feedback",
+  {
+    bookingId: uuid("booking_id")
+      .primaryKey()
+      .references(() => bookings.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    rating: integer("rating").notNull(),
+    comment: text("comment").notNull(),
+    publicConsentAt: timestamp("public_consent_at", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (t) => [
+    index("booking_service_feedback_public_idx").on(t.publicConsentAt, t.createdAt),
+    index("booking_service_feedback_client_idx").on(t.clientId),
+    check("booking_service_feedback_rating_check", sql`${t.rating} BETWEEN 1 AND 5`),
+    check("booking_service_feedback_comment_check", sql`length(btrim(${t.comment})) BETWEEN 20 AND 1500`),
+  ],
+);
+
 /** Immutable financial changes; monthly confirmation reporting must not rewrite history. */
 export const bookingValueEvents = pgTable(
   "booking_value_events",
@@ -460,3 +484,32 @@ export const notificationOutbox = pgTable(
     ),
   ],
 );
+
+// Backup archives are stored in a PRIVATE Supabase Storage bucket, not the web server's disk.
+// These tables only hold metadata and the selected automatic schedule.
+export const backupArchives = pgTable('backup_archives', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  source: varchar('source', { length: 12 }).notNull(),
+  status: varchar('status', { length: 12 }).notNull(),
+  storagePath: text('storage_path'),
+  filename: text('filename'),
+  sizeBytes: integer('size_bytes'),
+  tableCount: integer('table_count'),
+  rowCount: integer('row_count'),
+  tableRows: jsonb('table_rows').$type<{ name: string; rows: number }[]>(),
+  error: text('error'),
+}, (t) => [
+  index('backup_archives_created_idx').on(t.createdAt),
+  uniqueIndex('backup_archives_one_running').on(t.status).where(sql`${t.status} = 'RUNNING'`),
+]);
+
+export const backupSchedules = pgTable('backup_schedules', {
+  id: varchar('id', { length: 24 }).primaryKey().default('main'),
+  frequency: varchar('frequency', { length: 12 }).notNull().default('OFF'),
+  nextRunAt: timestamp('next_run_at', { withTimezone: true }),
+  lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});

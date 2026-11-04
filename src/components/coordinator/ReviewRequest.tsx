@@ -11,13 +11,14 @@ import { money, niceDate } from '@/components/ui/Blocks';
 import BookingChangeDialog, { type BookingChange } from '@/components/ui/BookingChangeDialog';
 import { BookingSavedDialog } from '@/components/ui/BookingFeedback';
 import EventScheduleEditor from '@/components/coordinator/EventScheduleEditor';
+import { manilaDate } from '@/lib/bookingCompletion';
 import useUnsavedChangesGuard from '@/hooks/useUnsavedChangesGuard';
 import { BookingHero, BookingStatus, BookingPanel, BookingInfoGrid, BookingTimeline, bookingStyles as s } from '@/components/ui/BookingSurface';
 
 type Detail = {
   id: string; reference: string; eventType: string; eventDate: string; venue: string; venueLatitude?: number | null; venueLongitude?: number | null; guestCount: number;
   estimatedBudget: string; preferredTheme: string; colorPalette: string; specialRequests: string;
-  inspirationAssetId: string | null; status: 'TENTATIVE' | 'HELD' | 'CONFIRMED' | 'CANCELLED';
+  inspirationAssetId: string | null; status: 'TENTATIVE' | 'HELD' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
   bookedValue: string | null; updatedAt: string;
   eventStartTime: string | null; eventEndTime: string | null;
   assignedCoordinatorId: string | null; scheduleNotes: string;
@@ -68,7 +69,7 @@ export default function ReviewRequest({ id, role, canUpdateStatus = true, canMes
     event.preventDefault(); setResult('');
     if (!booking || busy) return;
     if (normalizedAmount !== null && (!Number.isFinite(normalizedAmount) || normalizedAmount < 5000)) { setResult('Agreed booking value must be at least ₱5,000.'); return; }
-    if (status === 'CONFIRMED' && (!normalizedAmount || normalizedAmount < 5000)) { setResult('At least ₱5,000 is required to confirm an event.'); return; }
+    if (['CONFIRMED', 'COMPLETED'].includes(status) && (!normalizedAmount || normalizedAmount < 5000)) { setResult('At least ₱5,000 is required to confirm an event.'); return; }
     if (!changes.length) { setResult('No changes to save.'); return; }
     setConfirmationOpen(true);
   }
@@ -138,22 +139,23 @@ export default function ReviewRequest({ id, role, canUpdateStatus = true, canMes
         {booking.cancellationRequestedAt && <div className={`${s.alert} ${s.alertWarn}`} role="status"><AlertTriangle size={18} className="mt-0.5 shrink-0"/><span><strong>Cancellation requested</strong><br/>{booking.cancellationReason || 'The client requested cancellation.'} Review this request before updating the booking status.</span></div>}
         <BookingPanel title="Booking decision" description="Update status, agreed value and client-visible notes.">
           <div className={`${s.alert} mb-5`}><ShieldCheck size={18} className="mt-0.5 shrink-0"/><span>Held and Confirmed bookings exclusively reserve their date. Server-side double-booking protection remains active.</span></div>
-          {canUpdateStatus ? <form onSubmit={previewSave} className={s.form}>
+          {canUpdateStatus && booking.status !== 'COMPLETED' ? <form onSubmit={previewSave} className={s.form}>
             <div><label htmlFor="booking-review-status">Booking status</label><select id="booking-review-status" className={s.input} value={status} onChange={e => { setStatus(e.target.value as Detail['status']); markEdited(); }}>
-              <option value="TENTATIVE" disabled={booking.status === 'CONFIRMED' || booking.status === 'CANCELLED'}>Tentative · Awaiting review</option>
-              <option value="HELD" disabled={booking.status === 'CONFIRMED' || booking.status === 'CANCELLED'}>Held · Reserve date</option>
-              <option value="CONFIRMED" disabled={booking.status === 'CANCELLED'}>Confirmed · Event secured</option>
+              <option value="TENTATIVE" disabled={['CONFIRMED','COMPLETED','CANCELLED'].includes(booking.status)}>Tentative · Awaiting review</option>
+              <option value="HELD" disabled={['CONFIRMED','COMPLETED','CANCELLED'].includes(booking.status)}>Held · Reserve date</option>
+              <option value="CONFIRMED" disabled={['COMPLETED','CANCELLED'].includes(booking.status)}>Confirmed · Event secured</option>
+              <option value="COMPLETED" disabled={booking.status !== 'CONFIRMED' || booking.eventDate > manilaDate()}>Completed · Event delivered</option>
               <option value="CANCELLED">Cancelled · Release date</option>
             </select></div>
-            <div><label htmlFor="booking-review-value">Agreed value (PHP)</label><input id="booking-review-value" className={s.input} type="number" min="0" step="0.01" value={value} onChange={e => { setValue(e.target.value); markEdited(); }} placeholder="Required for confirmation"/></div>
+            <div><label htmlFor="booking-review-value">Agreed value (PHP)</label><input id="booking-review-value" className={s.input} type="number" min="5000" step="0.01" value={value} onChange={e => { setValue(e.target.value); markEdited(); }} placeholder="Required for confirmation"/></div>
             <div><label htmlFor="booking-review-note">Notes / client update</label><textarea id="booking-review-note" className={s.input} rows={4} value={note} onChange={e => { setNote(e.target.value); markEdited(); }} placeholder="Record a decision, instructions or next steps"/></div>
             <p className={s.helper}>The new status and agreed value are recorded only after you review and confirm your changes.</p>
             <button className={`${s.actionLink} w-full`} type="submit" disabled={busy || changes.length === 0}><CheckCircle2 size={16}/>{busy ? 'Saving changes…' : `Review ${changes.length} ${changes.length === 1 ? 'change' : 'changes'}`}</button>
             {result && <div role="alert" className={`${s.alert} ${s.alertDanger}`}>{result}</div>}
-          </form> : <div className={s.alert}>You can review this request, but your account cannot change its booking status.</div>}
+          </form> : <div className={s.alert}>{booking.status === 'COMPLETED' ? 'This event has been completed. Its booking decision is locked and the client may now submit service feedback.' : 'You can review this request, but your account cannot change its booking status.'}</div>}
         </BookingPanel>
         <BookingPanel title="Event scheduling" description="Organize the event timeline, assigned Coordinator and private notes.">
-          <EventScheduleEditor booking={booking} canEdit={canUpdateStatus} onSaved={refresh} onDirtyChange={setScheduleDirty}/>
+          <EventScheduleEditor booking={booking} canEdit={canUpdateStatus && booking.status !== 'COMPLETED'} onSaved={refresh} onDirtyChange={setScheduleDirty}/>
         </BookingPanel>
         {canViewList && <Link className={`${s.actionLink} ${s.actionLinkSecondary}`} href={listHref}><ArrowLeft size={16}/> Back to booking requests</Link>}
       </aside>

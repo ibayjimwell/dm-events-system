@@ -170,7 +170,7 @@ export const messageInput = messageReadInput
   });
 
 export const statusInput = z.object({
-  status: z.enum(['TENTATIVE', 'HELD', 'CONFIRMED', 'CANCELLED']),
+  status: z.enum(['TENTATIVE', 'HELD', 'CONFIRMED', 'COMPLETED', 'CANCELLED']),
   note: z.string().max(3000).optional(),
   bookedValue: z.number().finite().min(5000, 'Agreed booking value must be at least ₱5,000.').max(999999999)
     .refine(value => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6,

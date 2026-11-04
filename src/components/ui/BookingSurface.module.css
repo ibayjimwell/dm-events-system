@@ -48,6 +48,7 @@
 .tentative{background:#eaf1f8;border-color:#d9e6f3;color:#315e83}
 .held{background:#fff4dc;border-color:#f5e0ad;color:#9a661a}
 .confirmed{background:#e5f6ee;border-color:#c4e8d5;color:#236c4d}
+.completed{background:#e6f5ef;border-color:#b0dfc4;color:#195e48}
 .cancelled{background:#fcebed;border-color:#f2cdd3;color:#ab4154}
 .attention{display:inline-flex;align-items:center;gap:5px;color:#b04d36;font-size:11px;font-weight:750}
 .empty{display:flex;align-items:center;flex-direction:column;gap:11px;padding:45px 22px;text-align:center;border:1px dashed #cbdbe6;border-radius:15px;background:linear-gradient(180deg,#fafcfe,#f5f9fb)}

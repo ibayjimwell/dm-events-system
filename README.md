@@ -15,7 +15,7 @@ A full-stack, responsive Next.js App Router website based on the attached 57-pag
 | Realtime | Supabase Realtime Postgres Changes over a **server-side** service-role subscriber, forwarding only filtered invalidation events over authenticated SSE (client reloads via authorized API) |
 | Images | Cloudinary; type-checked on server with Sharp, randomized filenames. Inspiration/message images use authenticated delivery, proxied only after Next.js access checks. Package/hero assets are public if published. |
 | Recovery/verification | Resend email with short-lived hashed single-use tokens; verification is configurable |
-| Backups | Optional PostgreSQL custom dump of `public` + `drizzle` schemas, encrypted AES-256-GCM, off-site S3-compatible storage, audit history, manual trigger, cron endpoint, explicitly confirmed CLI restore |
+| Backups | Private encrypted archive history in Supabase Storage; on-demand exports, daily/weekly/monthly schedules, secure download and staging-only restore |
 
 Supabase Auth (`auth.users`) is **not** used. Never put a Supabase `service_role` key, PostgreSQL password, Cloudinary secret, or Resend key into frontend code or a `NEXT_PUBLIC_` environment variable.
 
@@ -25,7 +25,7 @@ Supabase Auth (`auth.users`) is **not** used. Never put a Supabase `service_role
 - A dedicated **Supabase** project with an active PostgreSQL database, database password and service-role key.
 - A **Cloudinary** account with cloud name, API key and API secret.
 - A sender domain configured in **Resend** if using password recovery/email verification (recommended for production).
-- For off-site backups: PostgreSQL client utilities `pg_dump` / `pg_restore`, S3-compatible object storage (e.g. R2/S3), AES backup key and a trusted external cron scheduler.
+- For backups: use the same Supabase project and Vercel deployment; configure `BACKUP_ARCHIVE_KEY` and `CRON_SECRET` as server-only secrets. Free-plan limits may apply.
 
 **The ZIP contains no credentials or live Supabase project.** You must provision the external accounts and set your own `.env` before using live data. It cannot connect to your project automatically without those secrets.
 
@@ -37,7 +37,7 @@ cp .env.example .env
 # Edit .env with your own real credentials
 ```
 
-Use Supabase **Database > Connect** to get the pooled connection URL for `DATABASE_URL`. Use the direct connection or **session pooler** (port typically 5432) for `MIGRATION_DATABASE_URL`. The transaction pooler (often port 6543) is suited to Next.js queries but should not be used for migrations, `pg_dump` or `pg_restore`. URL-encode any special characters in your database password.
+Use Supabase **Database > Connect** to get the pooled connection URL for `DATABASE_URL`. Use the direct connection or **session pooler** (port typically 5432) for `MIGRATION_DATABASE_URL`. The transaction pooler (often port 6543) can be used for runtime queries; use a direct connection or session pooler for migrations and consider one for large consistent manual exports. URL-encode any special characters in your database password.
 
 Required environment variables:
 
@@ -118,37 +118,32 @@ On the server, `/api/events` creates a Supabase Realtime `postgres_changes` subs
 
 **Deployment caveat:** this SSE approach works best on a persistent Node.js host that supports long-lived connections (e.g. VPS/Docker). Serverless platforms with short streaming function limits can terminate connections and cause reconnection churn. For larger traffic, replace per-connection subscriptions with a shared event broker or private Supabase Broadcast with correctly implemented custom JWT/RLS; do not expose service-role credentials to the browser.
 
-## Automatic encrypted backups and restoration
+## Database backups and archive history
 
-Optional `.env` variables:
+Authorized administrators can open **Administration → System Settings → Database Backup** to create a snapshot, inspect its table counts and size, download an existing archive, or select a daily/weekly/monthly automatic schedule. Successful backups are stored encrypted in a private bucket in the same Supabase project and appear in the backup history. The running application requires its existing `DATABASE_URL`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, plus a server-only `BACKUP_ARCHIVE_KEY` and `CRON_SECRET` for scheduled checks. The deployment must enable the supplied `vercel.json` cron job. No separate paid backup service is required within applicable free plan limits.
 
-```dotenv
-BACKUP_S3_BUCKET=my-private-backups
-BACKUP_S3_REGION=auto
-BACKUP_S3_ENDPOINT=https://ACCOUNT.r2.cloudflarestorage.com
-BACKUP_S3_ACCESS_KEY_ID=...
-BACKUP_S3_SECRET_ACCESS_KEY=...
-BACKUP_ENCRYPTION_KEY=64_lowercase_hex_characters_from_a_secure_random_generator
-BACKUP_CRON_SECRET=random-long-secret
-```
+**Important:** this is a **data-only** snapshot of the `public` schema, not a complete PostgreSQL disaster-recovery dump. It does not include schema definitions, Cloudinary files, managed Supabase `auth`/`storage`, or `.env` secrets. Storing backups inside the same Supabase project cannot protect against a full project loss. Download a separate copy to an encrypted location and keep the encryption key safe. For full setup and limitations, see [Backup History and Scheduling](docs/BACKUP_HISTORY_AND_SCHEDULING.md).
 
-To generate the encryption key, use:
+To create a backup directly on a trusted development PC instead of through the browser:
 
 ```bash
-node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+npm run backup
+# Creates backups/DM-Events-Backup-<date>.json.gz (backups/ is gitignored)
 ```
 
-Backups run **only when invoked**. Enable the policy in Admin > Maintenance > System settings, then schedule a daily POST to `/api/cron/backup` using `Authorization: Bearer <BACKUP_CRON_SECRET>` from a trusted external scheduler (or run `npm run backup` as a system cron job). `npm run backup` and Admin > Backup & restore also create on-demand backups. `pg_dump` must exist on the machine. Backup statuses are real database records; failures appear as FAILED, not fictitious successes. The code uses a 100-MiB output bound and should be upgraded to streamed/multipart backups for larger databases.
-
-Each dump contains the `public` and `drizzle` schemas, **not the managed Supabase `auth` or `storage` schemas**; the bytes are encrypted with AES-256-GCM before uploading to an off-device S3-compatible private bucket. Configure Cloudinary separately for image retention/export; Cloudinary assets are not in PostgreSQL dumps. Test backups and restore procedures on a **staging project** before production.
-
-To restore a known successful backup, an authorized operator in a maintenance environment must set `ALLOW_DESTRUCTIVE_RESTORE=YES` and `RESTORE_APPROVED_BY`, then:
+To check a downloaded file without touching a database:
 
 ```bash
-ALLOW_DESTRUCTIVE_RESTORE=YES RESTORE_APPROVED_BY=admin@example.com npm run restore -- BACKUP_UUID RESTORE-BACKUP_UUID
+npm run backup:verify -- backups/DM-Events-Backup-EXAMPLE.json.gz
 ```
 
-This is intentionally **not a destructive browser button**. The command checks an exact confirmation phrase, decrypts the off-site backup and runs `pg_restore --clean --if-exists`, then writes an audit record. Make a fresh backup, lock user access, and test this flow first; it can replace live data.
+Recovery is deliberately a guarded **staging-only** operation: create a separate empty PostgreSQL database, run this project's migrations in that database, set `RESTORE_DATABASE_URL` to that separate target, then run:
+
+```bash
+npm run restore -- backups/DM-Events-Backup-EXAMPLE.json.gz RESTORE-TO-EMPTY-DATABASE
+```
+
+The script refuses to use the same database as `DATABASE_URL`, refuses nonempty targets, and rolls back on SQL failure. Validate the recovered data before any production recovery plan. **There is no web-based destructive restore button.** For full instructions and limitations, see [Backup History and Scheduling](docs/BACKUP_HISTORY_AND_SCHEDULING.md).
 
 ## Source organization
 
@@ -170,7 +165,7 @@ src/
   components/ui/              # panels, stat cards, fields, status pills
   components/{shared,client,coordinator,admin}/
     ...                        # reusable feature components
-scripts/                       # administrator seed, encrypted backup, restore, snapshot helper
+scripts/                       # administrator seed, manual backup, verification, staging-only restore
 drizzle/                       # tracked SQL migrations, journal, baseline snapshot
 supabase/enable-realtime.sql  # one-time Supabase publication setup
 public/images/                # Venue photograph and DM logo extracted from supplied PDF
@@ -178,7 +173,7 @@ public/images/                # Venue photograph and DM logo extracted from supp
 
 ## Verification checklist
 
-After configuring real services, use **one client + one coordinator + one admin** to verify the workflow: register, verify email (if enabled), login, browse package, submit request with a valid 1-MiB-or-less inspiration file and consent, receive Tentative reference, see it on coordinator dashboard/calendar, update Held and Confirmed with booked value, send private messages both directions, request cancellation, mark Cancelled, review status history, and confirm that admin analytics include only currently confirmed bookings. Also test wrong-role URLs, API permission failures, password reset, file validation, mobile widths, editing packages, and encrypted backup/restore on staging.
+After configuring real services, use **one client + one coordinator + one admin** to verify the workflow: register, verify email (if enabled), login, browse package, submit request with a valid 1-MiB-or-less inspiration file and consent, receive Tentative reference, see it on coordinator dashboard/calendar, update Held and Confirmed with booked value, send private messages both directions, request cancellation, mark Cancelled, review status history, and confirm that admin analytics include only currently confirmed bookings. Also test wrong-role URLs, API permission failures, password reset, file validation, mobile widths, editing packages, and manual backup download/verification and a safe recovery test on staging.
 
 ### Important limitations
 
@@ -193,8 +188,8 @@ docker build -t dm-events-web .
 docker run --rm -p 3000:3000 --env-file .env dm-events-web
 ```
 
-Use an HTTPS reverse proxy and `SESSION_COOKIE_SECURE=true` in production. The minimal runtime container does not include `pg_dump`/`pg_restore`; schedule backups from a separate trusted operator host with PostgreSQL tools and S3 access, or extend your container image responsibly. See `docs/TRANSACTION_MATRIX.md` for the exact mapping of all 27 PDF steps.
+Use an HTTPS reverse proxy and `SESSION_COOKIE_SECURE=true` in production. The archive system uses a bounded read-only PostgreSQL export and encrypted private Supabase Storage. Keep offline downloaded copies in addition to scheduled backups. See `docs/TRANSACTION_MATRIX.md` for the exact mapping of all 27 PDF steps.
 
-## Cloudflare R2 database backups and Analytics CSV
+## Analytics CSV
 
-See [CLOUDFLARE_R2_SETUP.md](./CLOUDFLARE_R2_SETUP.md) for exact Cloudflare, GitHub Actions, Vercel, encryption, verification and restore steps. The Admin backup button queues a GitHub Actions job; it does not run `pg_dump` inside Vercel. Analytics exports include a summary, all-month trend, event-type breakdown and detailed movements in one CSV.
+Analytics exports include a summary, all-month trend, event-type breakdown and detailed movements in one CSV. This reporting export is separate from the database backup feature.

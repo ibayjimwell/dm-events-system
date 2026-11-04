@@ -65,7 +65,7 @@ test('staff booking save still requires review confirmation, preserves version c
 test('event scheduling flow and role guard remain present', () => {
   const review = source('src/components/coordinator/ReviewRequest.tsx');
   const schedule = source('src/components/coordinator/EventScheduleEditor.tsx');
-  assert.match(review, /EventScheduleEditor booking=\{booking\} canEdit=\{canUpdateStatus\}/);
+  assert.match(review, /EventScheduleEditor booking=\{booking\} canEdit=\{canUpdateStatus && booking.status !== 'COMPLETED'\}/);
   assert.match(schedule, /\/api\/bookings\/\$\{booking\.id\}\/schedule/);
   assert.match(schedule, /expectedUpdatedAt: booking\.updatedAt/);
   assert.match(schedule, /!canEdit \|\| booking\.status === 'CANCELLED'/);

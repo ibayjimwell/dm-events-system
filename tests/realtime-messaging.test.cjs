@@ -83,7 +83,7 @@ test('migration journal includes new migration in sequence and no existing event
   const journal = JSON.parse(source('drizzle/meta/_journal.json'));
   assert.ok(journal.entries.some(entry => entry.tag === '0007_realtime_chat_presence'));
   assert.ok(journal.entries.some(entry => entry.tag === '0010_mother_admin_module_access'));
-  assert.equal(journal.entries.at(-1).tag, '0011_budget_calendar_chat_retention');
+  assert.ok(journal.entries.some(entry => entry.tag === '0011_budget_calendar_chat_retention')); // Later migrations may follow.
   const sql = source('drizzle/0007_realtime_chat_presence.sql');
   assert.match(sql, /CREATE TABLE IF NOT EXISTS public\.message_typing/);
   assert.doesNotMatch(sql, /DROP TABLE|TRUNCATE|DELETE FROM/i);

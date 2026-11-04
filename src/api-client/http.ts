@@ -46,4 +46,4 @@ export async function api<T = any>(path: string, opts: RequestInit = {}): Promis
   }
 }
 
-export const json = (method: 'POST' | 'PATCH' | 'DELETE', body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
+export const json = (method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });

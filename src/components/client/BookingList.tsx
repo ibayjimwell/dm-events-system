@@ -9,7 +9,7 @@ import { ListSkeleton } from '@/components/ui/LoadingSkeleton';
 import { BookingEmpty, BookingHero, BookingRecord, BookingSearch, BookingSummary, BookingPanel, bookingStyles as s } from '@/components/ui/BookingSurface';
 
 type Item = { id: string; reference: string; eventType: string; eventDate: string; status: string; venue: string; createdAt?: string; source?: string };
-const tabs = ['ALL', 'TENTATIVE', 'HELD', 'CONFIRMED', 'CANCELLED'] as const;
+const tabs = ['ALL', 'TENTATIVE', 'HELD', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] as const;
 
 export default function BookingList() {
   const { data, loading, error, refresh } = useLiveQuery(() => api<{ bookings: Item[] }>('/api/bookings'), [],{cacheKey:'client:/api/bookings',realtimeKinds:['bookings','booking_history']});

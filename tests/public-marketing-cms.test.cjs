@@ -44,7 +44,7 @@ test('homepage sections are persisted in an additive SQL migration', () => {
   assert.ok(journal.entries.some(entry => entry.tag === '0006_public_homepage_content')); // New migrations can follow the CMS migration.
   assert.ok(journal.entries.some(entry => entry.tag === '0007_realtime_chat_presence'));
   assert.ok(journal.entries.some(entry => entry.tag === '0010_mother_admin_module_access'));
-  assert.equal(journal.entries.at(-1).tag, '0011_budget_calendar_chat_retention');
+  assert.ok(journal.entries.some(entry => entry.tag === '0011_budget_calendar_chat_retention')); // New migrations may follow.
 });
 
 test('website content remains draft/publish gated and never exposes drafts to public users', () => {

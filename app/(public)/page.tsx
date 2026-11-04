@@ -7,6 +7,7 @@ import { actor } from '@/lib/auth';
 import { portalHome } from '@/lib/portalHome';
 import { currentSite } from '@/models/read';
 import HomeShowcase from '@/components/marketing/HomeShowcase';
+import { publishedServiceFeedback } from '@/models/serviceFeedback';
 
 export const dynamic = 'force-dynamic';
 export default async function Home() {
@@ -14,10 +15,11 @@ export default async function Home() {
   if (user?.role === 'ADMIN' || user?.role === 'COORDINATOR') redirect(await portalHome(user));
   if (!user && (await cookies()).get('dm_staff_portal')?.value === '1') redirect('/login');
 
-  const [site, featured] = await Promise.all([
+  const [site, featured, feedback] = await Promise.all([
     currentSite(),
     db.select({ id: packages.id, name: packages.name, description: packages.description, inclusions: packages.inclusions, imageId: packages.imageId, imageIds: packages.imageIds })
       .from(packages).where(eq(packages.published, true)).orderBy(asc(packages.sortOrder), asc(packages.name)).limit(3),
+    publishedServiceFeedback(),
   ]);
   return <HomeShowcase
     site={{
@@ -29,5 +31,6 @@ export default async function Home() {
       contactPhone: site?.contactPhone,
     }}
     featured={featured}
+    feedback={feedback}
   />;
 }

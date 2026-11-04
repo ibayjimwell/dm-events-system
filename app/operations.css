@@ -96,3 +96,5 @@
 .workspace-calendar__day[class*="workspace-calendar__day--"].is-today .workspace-calendar__number {background:rgba(255,255,255,.23);color:white;}
 .workspace-calendar__day[class*="workspace-calendar__day--"][aria-pressed="true"] {outline:3px solid #102f4c;outline-offset:2px;border-color:white;}
 .workspace-calendar__legend {width:13px;height:13px;display:inline-block;border-radius:4px;flex-shrink:0;}
+
+.workspace-calendar__day--COMPLETED{background:#e0f5e9!important;border-color:#66ab81!important;color:#175a37!important}

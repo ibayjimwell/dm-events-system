@@ -7,6 +7,7 @@ import { and, eq, ne, inArray, sql } from 'drizzle-orm';
 import { notificationRows } from '@/lib/notifications/enqueue';
 import { tryImmediateDelivery } from '@/lib/notifications/worker';
 import { valueMovement } from '@/lib/confirmedValue';
+import { canMarkCompleted } from '@/lib/bookingCompletion';
 
 /** Atomic status, history, notification intent and confirmed-value accounting. */
 export const POST = route(async (req, ctx: { params: Promise<{ id: string }> }) => {
@@ -22,14 +23,20 @@ export const POST = route(async (req, ctx: { params: Promise<{ id: string }> }) 
       if (input.expectedUpdatedAt && before.updatedAt.toISOString() !== input.expectedUpdatedAt) {
         throw new HttpError(409, 'This booking was updated by another staff member. Refresh and review the latest values before saving.');
       }
+      if (before.status === 'COMPLETED') {
+        throw new HttpError(409, 'Completed bookings are closed and cannot be changed.');
+      }
       if (before.status === 'CANCELLED' && input.status !== 'CANCELLED') {
         throw new HttpError(409, 'Cancelled bookings cannot be reactivated. Create a new booking request.');
       }
-      if (before.status === 'CONFIRMED' && !['CONFIRMED', 'CANCELLED'].includes(input.status)) {
+      if (before.status === 'CONFIRMED' && !['CONFIRMED', 'COMPLETED', 'CANCELLED'].includes(input.status)) {
         throw new HttpError(409, 'A confirmed event may be edited or cancelled, but cannot be silently moved back to inquiry/hold.');
       }
+      if (input.status === 'COMPLETED' && !canMarkCompleted(before.status, before.eventDate)) {
+        throw new HttpError(409, 'Only confirmed bookings on or after their event date (Philippine time) can be marked Completed.');
+      }
       const newValue = input.bookedValue === undefined ? before.bookedValue : input.bookedValue;
-      if (input.status === 'CONFIRMED' && (newValue === null || Number(newValue) < 5000)) {
+      if (['CONFIRMED', 'COMPLETED'].includes(input.status) && (newValue === null || Number(newValue) < 5000)) {
         throw new HttpError(400, 'Set an agreed booking value of at least ₱5,000 before confirming an event.');
       }
       const note = input.note === undefined ? before.reviewNote : input.note.trim();
@@ -52,7 +59,7 @@ export const POST = route(async (req, ctx: { params: Promise<{ id: string }> }) 
       const now = new Date();
       await tx.update(bookings).set({
         status: input.status, bookedValue: newValue === null ? null : String(newValue),
-        reviewNote: note, confirmedAt: input.status === 'CONFIRMED' ? before.confirmedAt ?? now : null,
+        reviewNote: note, confirmedAt: ['CONFIRMED', 'COMPLETED'].includes(input.status) ? before.confirmedAt ?? now : null,
         cancellationRequestedAt: input.status === 'CANCELLED' ? null : before.cancellationRequestedAt,
         updatedAt: now,
       }).where(eq(bookings.id, id));

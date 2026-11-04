@@ -6,22 +6,22 @@ import styles from './BookingSurface.module.css';
 
 export { styles as bookingStyles };
 
-export type BookingStatusValue = 'TENTATIVE' | 'HELD' | 'CONFIRMED' | 'CANCELLED' | string;
+export type BookingStatusValue = 'TENTATIVE' | 'HELD' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | string;
 export type BookingInfo = { label: string; value: string | number | null | undefined };
 export type HistoryEntry = { id: string; toStatus: string; note: string | null; actorName: string | null; createdAt: string };
 
 const statusDescription: Record<string, string> = {
   TENTATIVE: 'Awaiting review', HELD: 'Date temporarily reserved',
-  CONFIRMED: 'Event confirmed', CANCELLED: 'Booking cancelled',
+  CONFIRMED: 'Event confirmed', COMPLETED: 'Event completed', CANCELLED: 'Booking cancelled',
 };
 
 export function BookingStatus({ value }: { value: BookingStatusValue }) {
   const classes: Record<string, string> = {
     TENTATIVE: styles.tentative, HELD: styles.held,
-    CONFIRMED: styles.confirmed, CANCELLED: styles.cancelled,
+    CONFIRMED: styles.confirmed, COMPLETED: styles.completed, CANCELLED: styles.cancelled,
   };
   return <span className={`${styles.pill} ${classes[value] || styles.tentative}`} title={statusDescription[value] || value}>
-    {value === 'CONFIRMED' ? <Check size={12} /> : <CircleDot size={11} />}
+    {(value === 'CONFIRMED' || value === 'COMPLETED') ? <Check size={12} /> : <CircleDot size={11} />}
     {value.charAt(0) + value.slice(1).toLowerCase()}
   </span>;
 }

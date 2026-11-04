@@ -50,13 +50,14 @@ test('notification actions retain authenticated server endpoints',()=>{
   for (const name of ['/api/notifications','/api/notifications/dispatch','/api/notifications/test-email']) assert.ok(notifications.includes(name));
   assert.match(notifications,/filteredItems\.map/);
 });
-test('backup controls retain secure server endpoints and gated restore model',()=>{
+test('backup controls offer stored archive history and scheduling',()=>{
   const settings=source('src/components/admin/BackupSettings.tsx');
-  const history=source('src/components/admin/Backups.tsx');
-  assert.match(settings,/\/api\/settings/);
-  assert.match(history,/\/api\/backups/);
-  assert.match(history,/window\.confirm/);
-  assert.match(history,/npm run restore/);
+  const backups=source('src/components/admin/Backups.tsx');
+  assert.match(settings,/Backup &amp; Recovery/);
+  assert.match(backups,/\/api\/backups/);
+  assert.match(backups,/window\.confirm/);
+  assert.match(backups,/Database Backup/);
+  assert.match(backups,/restricted to authorized administrators/i);
 });
 test('maintenance menu keeps server-side permission checks',()=>{
   const hub=source('app/(portal)/admin/maintenance/page.tsx');

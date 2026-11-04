@@ -22,7 +22,9 @@ function messageContent(p: NotificationPayload) {
     case 'BOOKING_STATUS_CHANGED':
       return { subject: `DM Events | ${p.reference} is now ${p.status.toLowerCase()}`,
         heading: `Booking status: ${p.status.toLowerCase()}`,
-        summary: p.status === 'CONFIRMED'
+        summary: p.status === 'COMPLETED'
+          ? 'Your event is complete! Sign in to your DM Events client booking to rate our service and share your experience.'
+          : p.status === 'CONFIRMED'
           ? 'Your event booking has been confirmed by DM Events. Contact our coordinator for the latest arrangements.'
           : p.status === 'CANCELLED'
             ? 'Your booking is recorded as cancelled. Please contact DM Events if you have questions.'

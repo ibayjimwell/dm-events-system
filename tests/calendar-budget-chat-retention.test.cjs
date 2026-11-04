@@ -9,7 +9,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 test('filled calendar dates prioritize confirmed over held and tentative; legend is filled', () => {
   const calendar = read('src/components/coordinator/Calendar.tsx');
   const styles = read('app/operations.css');
-  assert.match(calendar, /\['CONFIRMED','HELD','TENTATIVE','CANCELLED'\]/);
+  assert.match(calendar, /\['CONFIRMED','HELD','TENTATIVE','COMPLETED','CANCELLED'\]/);
   assert.match(calendar, /workspace-calendar__day--\$\{fillStatus\}/);
   assert.doesNotMatch(calendar, /items\.slice\(0,4\)\.map\(event/);
   assert.match(styles, /workspace-calendar__day--CONFIRMED\s*\{background:#167449;color:#fff/);

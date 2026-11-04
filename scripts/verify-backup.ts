@@ -1,25 +1,15 @@
-import 'dotenv/config';
-import { decryptBackup } from '../src/lib/backup';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+/** Checks a downloaded backup's format, table counts and integrity hash without a database connection. */
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { unpackManualBackup } from '../src/lib/manualBackupFormat';
 
 async function main() {
-  const storageKey = process.env.BACKUP_STORAGE_KEY;
-  if (!storageKey) throw new Error('Set BACKUP_STORAGE_KEY=dm-events/postgres/YYYY-MM-DD/<UUID>.dump.aes256gcm');
-  const dump = await decryptBackup(storageKey);
-  if (dump.subarray(0, 5).toString() !== 'PGDMP') throw new Error('Decrypted backup is not a PostgreSQL custom-format archive');
-  const temp = mkdtempSync(join(tmpdir(), 'dme-verify-'));
-  try {
-    const file = join(temp, 'database.dump');
-    writeFileSync(file, dump, { mode: 0o600 });
-    const list = execFileSync(process.env.PG_RESTORE_BIN || 'pg_restore', ['--list', file], {
-      maxBuffer: 8 * 1024 * 1024, timeout: 120_000,
-    }).toString('utf8');
-    if (!list.includes('TABLE') || !list.includes('bookings')) throw new Error('Backup archive has no expected public booking tables');
-    console.log('Verified: AES-256-GCM authenticated decryption; PostgreSQL custom archive and bookings catalog detected.');
-    console.log('This is an archive verification, NOT a full restore test.');
-  } finally { rmSync(temp, { recursive: true, force: true }); }
+  const file = process.argv[2];
+  if (!file) throw new Error('Usage: npm run backup:verify -- <path/to/DM-Events-Backup-*.json.gz>');
+  const backup = unpackManualBackup(await readFile(resolve(file)));
+  console.log(`VERIFIED ${file}`);
+  console.log(`Created: ${backup.exportedAt} | Schema: ${backup.schema} | Tables: ${backup.tableCount} | Records: ${backup.rowCount}`);
+  console.log(`SHA-256: ${backup.sha256}`);
+  console.log('Verification checks file integrity, not whether all external files or managed Supabase schemas are backed up.');
 }
-main().catch(error => { console.error(error instanceof Error ? error.message : 'Verification failed'); process.exitCode = 1; });
+main().catch(error => { console.error(error instanceof Error ? error.message : 'Verification failed.'); process.exitCode = 1; });

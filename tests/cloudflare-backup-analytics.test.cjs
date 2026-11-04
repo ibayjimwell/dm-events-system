@@ -7,10 +7,10 @@ const ts = require('typescript');
 const root = path.resolve(__dirname, '..');
 const source = name => fs.readFileSync(path.join(root, name), 'utf8');
 
-test('all new backup + export TypeScript files parse successfully', () => {
+test('manual-backup implementation and Analytics CSV TypeScript files parse', () => {
   const files = [
-    'src/lib/backup.ts','src/lib/backup-dispatch.ts','src/lib/analyticsCsv.ts',
-    'app/api/backups/route.ts','app/api/report.csv/route.ts','app/api/cron/backup/route.ts',
+    'src/lib/manualBackup.ts','src/lib/manualBackupFormat.ts', 'src/lib/analyticsCsv.ts',
+    'app/api/backups/route.ts','app/api/report.csv/route.ts',
     'scripts/backup.ts','scripts/restore.ts','scripts/verify-backup.ts',
     'src/components/admin/Analytics.tsx','src/components/admin/Backups.tsx',
   ];
@@ -20,18 +20,13 @@ test('all new backup + export TypeScript files parse successfully', () => {
   }
 });
 
-test('R2 backup is authenticated and never generates plaintext object or claims success at dispatch', () => {
-  const lib=source('src/lib/backup.ts'), route=source('app/api/backups/route.ts');
-  assert.match(lib,/aes-256-gcm/);
-  assert.match(lib,/pg_dump/);
-  assert.match(lib,/HeadObjectCommand/);
-  assert.match(lib,/PGDMP/);
-  assert.match(route,/requirePermission\('backups.manage'\)/);
-  assert.match(route,/status: 'QUEUED'/);
-  assert.match(route,/202/);
-  assert.doesNotMatch(route,/createBackup\(/);
-  assert.match(source('scripts/verify-backup.ts'),/pg_restore/);
-  assert.match(source('.github/workflows/dm-events-r2-backup.yml'),/schedule:/);
+test('the stored backup endpoint uses the existing Supabase project and not GitHub or R2', () => {
+  const route = source('app/api/backups/route.ts');
+  const helper = source('src/lib/manualBackup.ts');
+  assert.match(route, /requirePermission\('backups\.manage'\)/);
+  assert.match(route, /saveBackup\('MANUAL'/);
+  assert.doesNotMatch(route, /backupDispatch|BACKUP_GITHUB_TOKEN/);
+  assert.match(helper, /sql\.begin/);
 });
 
 test('report CSV has summary, monthly trend, event types and detailed rows and handles formula injection',()=>{

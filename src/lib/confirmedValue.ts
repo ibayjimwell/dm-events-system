@@ -7,8 +7,8 @@ export function cents(value: number | string | null | undefined): number {
 }
 export function valueMovement(beforeStatus: string, beforeValue: number | string | null,
   afterStatus: string, afterValue: number | string | null) {
-  const before = beforeStatus === 'CONFIRMED' ? cents(beforeValue) : 0;
-  const after = afterStatus === 'CONFIRMED' ? cents(afterValue) : 0;
+  const before = ['CONFIRMED', 'COMPLETED'].includes(beforeStatus) ? cents(beforeValue) : 0;
+  const after = ['CONFIRMED', 'COMPLETED'].includes(afterStatus) ? cents(afterValue) : 0;
   const delta = after - before;
   if (!delta) return null;
   const eventType: ConfirmedValueEventType = before === 0 ? 'CONFIRMATION' : after === 0 ? 'REVERSAL' : 'ADJUSTMENT';
