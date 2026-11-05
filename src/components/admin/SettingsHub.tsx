@@ -61,7 +61,7 @@ export default function SettingsHub({ canSettings, canBackups, initialTab }: Pro
             aria-selected={selected === 'backups'} aria-controls="panel-backups"
             onClick={() => switchTab('backups')}
             className={`inline-flex min-h-11 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${selected === 'backups' ? 'bg-sky-900 text-white' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'}`}>
-            <DatabaseBackup size={17} /> Database Backup
+            <DatabaseBackup size={17} /> Simple Backup
           </button>}
         </div>
       </div>
