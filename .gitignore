@@ -3,6 +3,5 @@ node_modules
 .env
 .env.local
 *.log
-backups/
 *.tsbuildinfo
 secret/
