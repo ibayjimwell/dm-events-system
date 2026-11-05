@@ -49,16 +49,16 @@ test('manual backup verification rejects modified data and table paths', () => {
   assert.throws(() => unpackManualBackup(gzipSync(JSON.stringify(invalid))), /table definition/i);
 });
 
-test('stored-backup APIs protect history, downloads and scheduling', () => {
+test('managed backup API is permission gated, dynamic, and uses private storage', () => {
   const api = source('app/api/backups/route.ts');
-  const download = source('app/api/backups/[id]/download/route.ts');
-  const schedule = source('app/api/backups/schedule/route.ts');
+  const file = source('app/api/backups/file/route.ts');
   assert.match(api, /requirePermission\('backups\.manage'\)/);
-  assert.match(api, /saveBackup\('MANUAL'/);
-  assert.match(download, /requirePermission\('backups\.manage'\)/);
-  assert.match(download, /Content-Disposition/);
-  assert.match(download, /no-store/);
-  assert.match(schedule, /requirePermission\('backups\.manage'\)/);
+  assert.match(api, /export const POST\s*=\s*route\(/);
+  assert.match(api, /createStoredBackup\('manual'\)/);
+  assert.match(api, /listStoredBackups\(/);
+  assert.match(file, /Content-Disposition/);
+  assert.match(file, /no-store/);
+  assert.match(file, /requirePermission\('backups\.manage'\)/);
   assert.doesNotMatch(api, /dispatchBackup|Github|R2|S3/);
 });
 
@@ -83,13 +83,15 @@ test('manual restore is staging-only and refuses a nonempty target, with atomic 
   assert.match(script, /jsonb_populate_recordset/);
 });
 
-test('Backup UI shows archive history, details and same-origin downloads', () => {
+test('Backup Center can create, view, download and delete saved snapshots', () => {
   const ui = source('src/components/admin/Backups.tsx');
-  assert.match(ui, /api\('\/api\/backups', \{ method: 'POST' \}/);
+  assert.match(ui, /request\('\/api\/backups', 'POST'\)/);
   assert.match(ui, /URL\.createObjectURL/);
+  assert.match(ui, /Download/);
   assert.match(ui, /Backup history/);
-  assert.match(ui, /Automatic backups/);
   assert.match(ui, /window\.confirm/);
+  assert.match(ui, /action=inspect/);
+  assert.match(ui, /'DELETE'/);
   assert.doesNotMatch(ui, /Queue R2 backup|GitHub runner configuration|dispatchBackup/);
 });
 

@@ -10,7 +10,9 @@ const source = name => fs.readFileSync(path.join(root, name), 'utf8');
 test('manual-backup implementation and Analytics CSV TypeScript files parse', () => {
   const files = [
     'src/lib/manualBackup.ts','src/lib/manualBackupFormat.ts', 'src/lib/analyticsCsv.ts',
-    'app/api/backups/route.ts','app/api/report.csv/route.ts',
+    'app/api/backups/route.ts','app/api/backups/file/route.ts',
+    'app/api/cron/daily-backup/route.ts','src/lib/managedBackupStore.ts',
+    'src/lib/managedBackupCrypto.ts','app/api/report.csv/route.ts',
     'scripts/backup.ts','scripts/restore.ts','scripts/verify-backup.ts',
     'src/components/admin/Analytics.tsx','src/components/admin/Backups.tsx',
   ];
@@ -20,11 +22,11 @@ test('manual-backup implementation and Analytics CSV TypeScript files parse', ()
   }
 });
 
-test('the stored backup endpoint uses the existing Supabase project and not GitHub or R2', () => {
+test('managed backups use existing Supabase and avoid Cloudflare/GitHub credentials', () => {
   const route = source('app/api/backups/route.ts');
   const helper = source('src/lib/manualBackup.ts');
   assert.match(route, /requirePermission\('backups\.manage'\)/);
-  assert.match(route, /saveBackup\('MANUAL'/);
+  assert.match(route, /createStoredBackup\('manual'\)/);
   assert.doesNotMatch(route, /backupDispatch|BACKUP_GITHUB_TOKEN/);
   assert.match(helper, /sql\.begin/);
 });

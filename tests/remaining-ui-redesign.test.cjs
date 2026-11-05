@@ -50,14 +50,13 @@ test('notification actions retain authenticated server endpoints',()=>{
   for (const name of ['/api/notifications','/api/notifications/dispatch','/api/notifications/test-email']) assert.ok(notifications.includes(name));
   assert.match(notifications,/filteredItems\.map/);
 });
-test('backup controls offer stored archive history and scheduling',()=>{
+test('backup controls offer encrypted managed storage and safe download',()=>{
   const settings=source('src/components/admin/BackupSettings.tsx');
   const backups=source('src/components/admin/Backups.tsx');
-  assert.match(settings,/Backup &amp; Recovery/);
+  assert.match(settings,/Automatic backup policy/);
   assert.match(backups,/\/api\/backups/);
   assert.match(backups,/window\.confirm/);
-  assert.match(backups,/Database Backup/);
-  assert.match(backups,/restricted to authorized administrators/i);
+  assert.match(backups,/existing local restore script|local scripts/);
 });
 test('maintenance menu keeps server-side permission checks',()=>{
   const hub=source('app/(portal)/admin/maintenance/page.tsx');

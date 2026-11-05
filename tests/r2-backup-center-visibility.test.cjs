@@ -6,11 +6,13 @@ const ts = require('typescript');
 const root = path.resolve(__dirname, '..');
 const get = name => fs.readFileSync(path.join(root, name), 'utf8');
 
-test('simple backup UI and API TypeScript parse', () => {
+test('managed backup UI and API TypeScript parse', () => {
   for (const name of [
     'src/components/admin/Backups.tsx', 'src/components/admin/BackupSettings.tsx',
     'src/components/admin/SettingsHub.tsx', 'app/api/backups/route.ts',
     'src/lib/manualBackup.ts', 'src/lib/manualBackupFormat.ts',
+    'src/lib/managedBackupStore.ts', 'src/lib/managedBackupCrypto.ts',
+    'app/api/backups/file/route.ts', 'app/api/cron/daily-backup/route.ts',
   ]) {
     const result = ts.transpileModule(get(name), { fileName: name, reportDiagnostics: true, compilerOptions: {
       target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.ReactJSX,
@@ -27,15 +29,17 @@ test('backup remains permission gated, embedded inside Settings and linked from 
   assert.match(page, /canBackups = permissions\.has\('backups\.manage'\)/);
   assert.match(page, /<SettingsHub/);
   assert.match(hub, /<Backups canSettings=\{canSettings\}/);
-  assert.match(menu, /label: 'Database Backups', icon: DatabaseBackup, permission: 'backups\.manage'/);
-  assert.match(maintenance, /Database backups/);
+  assert.match(menu, /label: 'Backup Center', icon: DatabaseBackup, permission: 'backups\.manage'/);
+  assert.match(maintenance, /Backup Center/);
 });
 
-test('scheduled controls match operational backup settings', () => {
+test('automatic backup policy and history controls are visible', () => {
   const settings = get('src/components/admin/BackupSettings.tsx');
   const ui = get('src/components/admin/Backups.tsx');
-  assert.doesNotMatch(settings, /Automatic backup policy|GitHub Actions runner|Save backup policy/);
-  assert.match(ui, /Automatic backups/);
-  assert.match(ui, /Database Backup/);
-  assert.doesNotMatch(ui, /No Cloudflare|no card|GitHub runner|Simple Backup Center/i);
+  assert.match(settings, /Automatic backup policy/);
+  assert.match(settings, /seven successful automatic snapshots/);
+  assert.match(ui, /Backup history/);
+  assert.match(ui, /Create backup/);
+  assert.match(ui, /action=inspect/);
+  assert.doesNotMatch(settings, /GitHub Actions runner|Cloudflare R2 key/);
 });

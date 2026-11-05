@@ -9,8 +9,8 @@ const modules = [
   { title:'Event packages',detail:'Curate, organize and publish the packages clients can explore.',href:'/admin/maintenance/packages',permission:'packages.manage',Icon:Boxes,category:'CLIENT EXPERIENCE' },
   { title:'Website content',detail:'Edit your homepage, published details and privacy information.',href:'/admin/maintenance/content',permission:'content.manage',Icon:Globe,category:'CLIENT EXPERIENCE' },
   { title:'Accounts & permissions',detail:'Manage staff access, account status and module-level authorization.',href:'/admin/maintenance/users',permission:'users.manage',Icon:Users,category:'PEOPLE & ACCESS' },
-  { title:'Download database backup',detail:'Save a manual backup to your device with no card, subscription or external service.',href:'/admin/maintenance/settings?tab=backups',permission:'backups.manage',Icon:Database,category:'SYSTEM OPERATIONS' },
-  { title:'System settings',detail:'Read backup and data protection instructions.',href:'/admin/maintenance/settings',permission:'settings.manage',Icon:Settings,category:'SYSTEM OPERATIONS' },
+  { title:'Backup Center',detail:'Create, schedule, view, verify, download and manage encrypted database backups without a paid backup provider.',href:'/admin/maintenance/settings?tab=backups',permission:'backups.manage',Icon:Database,category:'SYSTEM OPERATIONS' },
+  { title:'System settings',detail:'Review the backup schedule and data protection instructions.',href:'/admin/maintenance/settings',permission:'settings.manage',Icon:Settings,category:'SYSTEM OPERATIONS' },
   { title:'Email & SMS delivery',detail:'Check notification delivery, retry failures, and test email connectivity.',href:'/admin/maintenance/notifications',permission:'settings.manage',Icon:BellRing,category:'SYSTEM OPERATIONS' },
 ] as const;
 

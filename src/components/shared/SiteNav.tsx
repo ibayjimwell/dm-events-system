@@ -71,7 +71,7 @@ const adminLinks: NavItem[] = [
 const maintenanceLinks: NavItem[] = [
   { href: '/admin/maintenance/packages', label: 'Manage Packages', icon: Package, permission: 'packages.manage' },
   { href: '/admin/maintenance/content', label: 'Website Content', icon: FolderKanban, permission: 'content.manage' },
-  { href: '/admin/maintenance/settings?tab=backups', label: 'Database Backups', icon: DatabaseBackup, permission: 'backups.manage' },
+  { href: '/admin/maintenance/settings?tab=backups', label: 'Backup Center', icon: DatabaseBackup, permission: 'backups.manage' },
   { href: '/admin/maintenance/settings', label: 'System Settings', icon: Settings2, permission: 'settings.manage' },
   { href: '/admin/maintenance/notifications', label: 'Email & SMS Notifications', icon: MessageCircle, permission: 'settings.manage' },
   { href: '/admin/maintenance/users', label: 'User Access', icon: UsersRound, permission: 'users.manage' },
