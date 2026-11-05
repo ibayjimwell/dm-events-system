@@ -9,6 +9,8 @@ import {
 import { api } from '@/api-client/http';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { DetailSkeleton } from '@/components/ui/LoadingSkeleton';
+import BackupExplorer from '@/components/admin/BackupExplorer';
+import type { BackupOverview } from '@/lib/backupExplorer';
 
 type BackupFrequency = 'daily' | 'weekly' | 'monthly';
 
@@ -21,10 +23,6 @@ type BackupStatus = {
   nextRunAt: string; automaticOverdue: boolean; missing: string[];
   retention: string; historyLimitPerKind: number;
   backups: BackupEntry[]; includes: string;
-};
-type InspectResult = {
-  verified: boolean; filename: string; exportedAt: string; tables: number; rows: number;
-  tableNames: string[]; format: string; message: string;
 };
 
 function formatDate(value: string) {
@@ -56,7 +54,7 @@ export default function Backups({ canSettings = false }: { canSettings?: boolean
   const [activePath, setActivePath] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [failed, setFailed] = useState(false);
-  const [inspected, setInspected] = useState<InspectResult | null>(null);
+  const [inspected, setInspected] = useState<{ entry: BackupEntry; report: BackupOverview } | null>(null);
   const [frequencyChoice, setFrequencyChoice] = useState<BackupFrequency | ''>('');
 
   const latestAuto = useMemo(() => data?.backups.find(item => item.kind === 'automatic'), [data]);
@@ -108,10 +106,10 @@ export default function Backups({ canSettings = false }: { canSettings?: boolean
   function inspectBackup(entry: BackupEntry) {
     void run(async () => {
       const body = await request(`/api/backups/file?path=${encodeURIComponent(entry.path)}&action=inspect`);
-      const inspected = body as InspectResult;
-      if (!inspected.verified) throw new Error('The backup could not be verified.');
-      setInspected(inspected);
-      setNotice('Backup checksum verified. The preview contains metadata only.');
+      const report = body as BackupOverview;
+      if (!report.verified || !Array.isArray(report.tableDetails)) throw new Error('The server returned an unsupported backup inspection response. Redeploy the updated backup API.');
+      setInspected({ entry, report });
+      setNotice('Backup verified. The read-only explorer is open.');
     }, entry.path);
   }
 
@@ -141,7 +139,7 @@ export default function Backups({ canSettings = false }: { canSettings?: boolean
     if (!window.confirm(`Permanently delete this saved backup?\n\n${entry.filename}\n\nThis cannot be undone.`)) return;
     void run(async () => {
       await request(`/api/backups/file?path=${encodeURIComponent(entry.path)}`, 'DELETE');
-      if (inspected?.filename === entry.filename) setInspected(null);
+      if (inspected?.entry.path === entry.path) setInspected(null);
       await refresh();
       setNotice('The selected backup has been deleted from private storage.');
     }, entry.path);
@@ -232,21 +230,24 @@ export default function Backups({ canSettings = false }: { canSettings?: boolean
             <td className="max-w-[250px] break-all py-3 pr-4 text-xs">{entry.filename}</td>
             <td className="whitespace-nowrap py-3 pr-4">{formatBytes(entry.bytes)}</td>
             <td className="py-3"><div className="flex flex-wrap items-center gap-2">
-              <button type="button" className="btn btn-outline !px-3 !py-2" disabled={busy} onClick={() => inspectBackup(entry)} title="Verify and view backup metadata"><Eye size={15}/>{activePath === entry.path && busy ? 'Checking…' : 'View'}</button>
+              <button type="button" className="btn btn-outline !px-3 !py-2" disabled={busy} onClick={() => inspectBackup(entry)} title="Verify and explore saved backup content"><Eye size={15}/>{activePath === entry.path && busy ? 'Checking…' : 'View'}</button>
               <button type="button" className="btn btn-outline !px-3 !py-2" disabled={busy} onClick={() => downloadBackup(entry)}><Download size={15}/>Download</button>
               <button type="button" className="btn btn-outline !px-3 !py-2 !text-red-700" disabled={busy} onClick={() => deleteBackup(entry)}><Trash2 size={15}/>Delete</button>
             </div></td>
           </tr>)}</tbody>
         </table>
       </div>}
-      {inspected && <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
-        <div className="flex flex-wrap items-center justify-between gap-2"><strong className="flex items-center gap-2"><CheckCircle2 size={18}/> Verified backup details</strong><button type="button" className="font-bold underline" onClick={() => setInspected(null)}>Close</button></div>
-        <p className="mt-3 break-all">{inspected.filename}</p>
-        <p className="mt-1">Exported: {formatDate(inspected.exportedAt)} · {inspected.tables} tables · {inspected.rows} rows</p>
-        <p className="mt-1">Tables: {inspected.tableNames.join(', ')}</p>
-        <p className="mt-2 text-xs">{inspected.message} This is not a database restore or an independent recovery test.</p>
-      </div>}
+
     </section>
+
+    {inspected && <BackupExplorer
+      key={inspected.entry.path}
+      path={inspected.entry.path}
+      report={inspected.report}
+      busy={busy}
+      onClose={() => setInspected(null)}
+      onDownload={() => downloadBackup(inspected.entry)}
+    />}
 
     <section className="workspace-grid workspace-section">
       <div className="workspace-card"><div className="flex items-center gap-2 text-[#143d5e]"><LockKeyhole size={19}/><h2>Data protection</h2></div>
