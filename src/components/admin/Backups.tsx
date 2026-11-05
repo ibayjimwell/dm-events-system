@@ -28,6 +28,7 @@ type Frequency = 'OFF' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
 type BackupResponse = {
   configured: boolean;
   setupIssues?: Array<'SUPABASE_URL' | 'SUPABASE_SERVER_KEY' | 'BACKUP_ARCHIVE_KEY'>;
+  archiveKeyStatus?: 'READY' | 'MISSING' | 'TRAILING_BACKSLASH' | 'INVALID';
   schedulerConfigured: boolean;
   history: Archive[];
   schedule: { frequency: Frequency; nextRunAt: string | null; lastAttemptAt: string | null };
@@ -172,7 +173,9 @@ export default function Backups({ canSettings = false }: { canSettings?: boolean
             {(data.setupIssues ?? []).map(issue => <li key={issue}>
               {issue === 'SUPABASE_URL' ? 'Supabase project URL is missing or invalid.' :
                 issue === 'SUPABASE_SERVER_KEY' ? 'Supabase server access key is missing or does not have the required privileges.' :
-                'Backup encryption key is missing or invalid.'}
+                data.archiveKeyStatus === 'MISSING' ? 'Backup encryption key has not been configured on the server.' :
+                data.archiveKeyStatus === 'TRAILING_BACKSLASH' ? 'Backup encryption key has an extra backslash at the end. Remove it from the server environment variable.' :
+                'Backup encryption key must contain exactly 64 hexadecimal characters.'}
             </li>)}
           </ul>
           <p className="mt-3 text-xs text-slate-500">Update the server environment variables, restart or redeploy the application, then refresh this page. Backup files are stored privately in Supabase.</p>

@@ -3,9 +3,20 @@ import { HttpError } from '@/lib/http';
 
 const MAGIC = Buffer.from('DME2');
 
+export type BackupArchiveKeyStatus = 'READY' | 'MISSING' | 'TRAILING_BACKSLASH' | 'INVALID';
+
+/** A non-secret explanation of the active server-side key configuration. */
+export function backupArchiveKeyStatus(): BackupArchiveKeyStatus {
+  const value = process.env.BACKUP_ARCHIVE_KEY ?? '';
+  if (!value) return 'MISSING';
+  if (/^[0-9a-f]{64}$/i.test(value)) return 'READY';
+  if (/^[0-9a-f]{64}\\$/i.test(value)) return 'TRAILING_BACKSLASH';
+  return 'INVALID';
+}
+
 function key(): Buffer {
   const value = process.env.BACKUP_ARCHIVE_KEY ?? '';
-  if (!/^[0-9a-f]{64}$/i.test(value)) {
+  if (backupArchiveKeyStatus() !== 'READY') {
     throw new HttpError(503, 'Backup encryption is not configured. Contact your system administrator.');
   }
   return Buffer.from(value, 'hex');
@@ -34,5 +45,5 @@ export function decryptBackupArchive(encrypted: Buffer): Buffer {
 }
 
 export function backupEncryptionReady(): boolean {
-  return /^[0-9a-f]{64}$/i.test(process.env.BACKUP_ARCHIVE_KEY ?? '');
+  return backupArchiveKeyStatus() === 'READY';
 }

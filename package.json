@@ -20,7 +20,8 @@
     "test:spa": "node --test tests/*.test.cjs",
     "backup:verify": "tsx scripts/verify-backup.ts",
     "access:bootstrap": "tsx scripts/bootstrap-mother-admin.ts",
-    "backup:diagnose": "node scripts/diagnose-backup-storage.mjs"
+    "backup:diagnose": "node scripts/diagnose-backup-storage.mjs",
+    "backup:configure": "node scripts/configure-backup-environment.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.900.0",

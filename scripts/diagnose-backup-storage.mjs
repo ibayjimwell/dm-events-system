@@ -1,25 +1,20 @@
 /**
- * Run locally: node scripts/diagnose-backup-storage.mjs
- * Optional:    node scripts/diagnose-backup-storage.mjs --initialize
- *
- * Reads Next.js local env files without ever printing secret values.
+ * Run: npm run backup:diagnose
+ * Optional: npm run backup:diagnose -- --initialize
+ * Reads the environment using Next.js local-file precedence, with no secrets printed.
  */
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { archiveKeyProblem, explainArchiveKeyProblem, readBackupEnvironment } from './backup-env.mjs';
 
-// Node.js 20.12+ supports the same dotenv syntax used in .env.local.
-for (const file of ['.env.local', '.env']) {
-  if (existsSync(resolve(file))) process.loadEnvFile(resolve(file));
-}
-const url = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
-const serverKey = (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-const archiveKey = process.env.BACKUP_ARCHIVE_KEY || '';
+const { values, sources } = readBackupEnvironment();
+const url = (values.SUPABASE_URL || values.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+const serverKey = (values.SUPABASE_SECRET_KEY || values.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+const archiveKey = values.BACKUP_ARCHIVE_KEY || '';
 const issues = [];
 
 try {
   const parsed = new URL(url);
-  if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname || /^project\./i.test(parsed.hostname)) throw Error();
-} catch { issues.push('SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) must contain your project URL.'); }
+  if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname || /^(project\.|your[-_])/i.test(parsed.hostname)) throw Error();
+} catch { issues.push('SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) must contain your Supabase project URL.'); }
 
 function validServerKey(value) {
   if (value.startsWith('sb_secret_')) return value.length > 'sb_secret_'.length + 15;
@@ -29,14 +24,21 @@ function validServerKey(value) {
   try { return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')).role === 'service_role'; }
   catch { return false; }
 }
-if (!validServerKey(serverKey)) issues.push('SUPABASE_SECRET_KEY (or legacy SUPABASE_SERVICE_ROLE_KEY) must be a server secret, not the anon/public key.');
-if (!/^[0-9a-f]{64}$/i.test(archiveKey)) issues.push('BACKUP_ARCHIVE_KEY must be exactly 64 hexadecimal characters.');
-
+if (!validServerKey(serverKey)) issues.push('SUPABASE_SECRET_KEY (or legacy SUPABASE_SERVICE_ROLE_KEY) must be a server secret, not an anon/public key.');
+const problem = archiveKeyProblem(archiveKey);
+if (problem) {
+  issues.push(explainArchiveKeyProblem(problem));
+  if (sources.BACKUP_ARCHIVE_KEY) {
+    console.error(`Archive key loaded from: ${sources.BACKUP_ARCHIVE_KEY} (value hidden).`);
+  } else if (values.BACKUP_ENCRYPTION_KEY) {
+    console.error('The older BACKUP_ENCRYPTION_KEY is present, but the current archive system requires BACKUP_ARCHIVE_KEY.');
+  }
+}
 if (issues.length) {
   console.error('Database Backup configuration is incomplete:');
   for (const issue of issues) console.error(`  - ${issue}`);
-  console.error('\nCreate an encryption key with: openssl rand -hex 32');
-  console.error('Set the values in .env.local and in the production deployment settings.');
+  console.error('\nRun "npm run backup:configure" to repair the local backup settings, or edit your environment configuration manually.');
+  console.error('For deployed applications, configure the same variables in the hosting environment and redeploy.');
   process.exitCode = 1;
 } else {
   console.log('Database Backup environment configuration: OK');
@@ -70,10 +72,10 @@ if (issues.length) {
         }
       }
     } else {
-      console.error(`Supabase Storage check failed (${error?.statusCode ?? 'connection error'}). Confirm the project URL and server secret in .env.local.`);
+      console.error(`Supabase Storage check failed (${error?.statusCode ?? 'connection error'}). Confirm the project URL and server secret.`);
       process.exitCode = 1;
     }
-  } catch (error) {
+  } catch {
     console.error('Cannot connect to Supabase Storage. Check network connectivity and the configured project URL.');
     process.exitCode = 1;
   }
