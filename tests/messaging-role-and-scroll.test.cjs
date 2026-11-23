@@ -68,7 +68,8 @@ test('messaging access remains scoped while standalone from booking management p
   assert.match(model, /eq\(bookings\.clientId, actor\.id\)/);
   assert.doesNotMatch(model, /can\(actor, 'bookings\.view\.all'\)/);
   assert.match(read('src/models/read.ts'), /await requireMessageBooking\(bookingId,user\)/);
-  const events = read('app/api/events/route.ts');
+  const events = read('src/connection/bridge.ts');
   assert.match(events, /allowedChatBooking/);
-  assert.match(events, /if \(!allowedChatBooking\(row\?\.booking_id\)\) return/);
+  assert.match(events, /emitChat\(row\?\.booking_id, 'message'/);
+  assert.match(events, /allowedChatBooking/);
 });

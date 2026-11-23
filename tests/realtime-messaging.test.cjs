@@ -6,7 +6,7 @@ const ts = require('typescript');
 const source = name => fs.readFileSync(path.join(__dirname, '..', name), 'utf8');
 
 const changedTypeScript = [
-  'src/db/schema.ts', 'app/api/events/route.ts', 'app/api/messages/route.ts',
+  'src/db/schema.ts', 'app/api/events/route.ts', 'src/connection/bridge.ts', 'app/api/messages/route.ts',
   'app/api/messages/threads/route.ts', 'app/api/messages/typing/route.ts',
   'src/lib/live-events.ts', 'src/models/messaging.ts', 'src/components/shared/MessagesPanel.tsx',
 ];
@@ -23,14 +23,14 @@ test('all complete messaging sources parse successfully', () => {
 });
 
 test('session-authenticated Supabase Realtime bridge never exposes service key or message bodies', () => {
-  const bridge = source('app/api/events/route.ts');
+  const bridge = source('src/connection/bridge.ts');
   assert.match(bridge, /await actor\(\)/);
   assert.match(bridge, /realtimeServer\(\)/);
   assert.match(bridge, /allowedBooking/);
   assert.match(bridge, /canChat/);
   assert.match(bridge, /kind: 'message'/);
   assert.match(bridge, /kind: 'typing'/);
-  assert.match(bridge, /kind: 'read'/);
+  assert.match(bridge, /emitChat\(row\?\.booking_id, 'read'/);
   assert.doesNotMatch(bridge, /controller\.enqueue\([^\n]*message\.body/);
   assert.doesNotMatch(source('src/components/shared/MessagesPanel.tsx'), /SERVICE_ROLE|createClient\(/);
 });

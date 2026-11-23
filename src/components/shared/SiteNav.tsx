@@ -14,7 +14,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { beginApiRequest } from '@/lib/api-activity';
 import { invalidateQuerySnapshots } from '@/lib/query-cache';
-import { closeLiveEvents } from '@/lib/live-events';
+import { closeLiveEvents } from '@/connection/events';
 import type { Role } from '@/lib/auth';
 import type { Permission } from '@/lib/permissions';
 import styles from './SiteNav.module.css';

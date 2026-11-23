@@ -29,10 +29,12 @@ export async function requireMessageBooking(bookingId: string, actor: Actor) {
 export async function readMessageBookings(actor: Actor) {
   const query = db.select({
     id: bookings.id,
+    clientId: bookings.clientId,
     reference: bookings.reference,
     clientName: sql<string>`coalesce(${users.fullName}, ${bookings.contactName})`,
     eventType: bookings.eventType,
     eventDate: bookings.eventDate,
+    createdAt: bookings.createdAt,
     status: bookings.status,
     source: bookings.source,
   }).from(bookings).leftJoin(users, eq(users.id, bookings.clientId));

@@ -67,7 +67,7 @@ test('messaging is optimistic, retains draft on failure and does not refetch aft
   assert.match(send,/Your draft was restored/);
   assert.doesNotMatch(send,/await Promise\.all\(\[conversation\.refresh\(\), all\.refresh\(\)\]\)/);
   assert.match(chat,/Sending…/);
-  assert.match(chat,/if \(!othersTyping\) return/);
+  assert.match(chat,/if \(!anyTyping\) return/);
 });
 
 test('authentication and RBAC stay server-enforced with request-scoped memoization', () => {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react';
-import { subscribeToLiveChanges } from '@/lib/live-events';
+import { subscribeToLiveChanges } from '@/connection/events';
 import { isFocusRefreshDue, shouldInvalidateForKind } from '@/lib/query-invalidation';
 import { readQuerySnapshot, writeQuerySnapshot } from '@/lib/query-cache';
 

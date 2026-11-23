@@ -50,10 +50,10 @@ test('navbar does not automatically prefetch dynamic portal routes', () => {
 test('dashboard live query batches and ignores unrelated change events', () => {
   const hook = read('src/hooks/useLiveQuery.ts');
   const overview = read('src/components/admin/Overview.tsx');
-  const live = read('src/lib/live-events.ts');
+  const live = read('src/connection/events.ts');
   assert.match(hook, /shouldInvalidateForKind\(kind, kinds\)/);
   assert.match(hook, /setTimeout\(\(\) => void refresh\(\), 650\)/);
   assert.match(hook, /pendingRealtimeRefresh\.current/);
   assert.match(overview, /realtimeKinds:\['bookings','booking_history','messages','message_reads','booking_value_events'\]/);
-  assert.match(live, /listeners\.forEach\(fn => fn\(kind\)\)/);
+  assert.match(live, /notifyChanges\(kind\)/);
 });

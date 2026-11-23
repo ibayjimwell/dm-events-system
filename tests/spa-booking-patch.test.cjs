@@ -33,8 +33,8 @@ test('client fetches track activity without disabling no-store or error handling
 
 test('realtime subscription is shared instead of creating a connection for every query', () => {
   assert.match(src('src/hooks/useLiveQuery.ts'), /subscribeToLiveChanges/);
-  assert.match(src('src/lib/live-events.ts'), /new EventSource/);
-  assert.match(src('src/lib/live-events.ts'), /if \(!listeners\.size/);
+  assert.match(src('src/connection/events.ts'), /new EventSource/);
+  assert.match(src('src/connection/events.ts'), /if \(!listeners\.size/);
 });
 
 test('employee booking updates prompt before POST and preserve successful save and access-aware navigation', () => {

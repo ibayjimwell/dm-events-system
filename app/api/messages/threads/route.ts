@@ -62,10 +62,12 @@ export const GET = route(async (req) => {
   const counts = new Map(unread.map(r => [r.bookingId, r.count]));
   const threads = visible.map(b => ({
     id: b.id,
+    clientId: b.clientId,
     reference: b.reference,
     clientName: b.clientName,
     eventType: b.eventType,
     eventDate: b.eventDate,
+    createdAt: b.createdAt,
     status: b.status,
     source: b.source,
     deletedAt: removed.get(b.id)?.deletedAt ?? null,
@@ -78,8 +80,8 @@ export const GET = route(async (req) => {
     } : null,
     unread: view === 'trash' ? 0 : counts.get(b.id) || 0,
   })).sort((a,b) => {
-    const dateA = a.latest?.createdAt ? new Date(a.latest.createdAt).getTime() : 0;
-    const dateB = b.latest?.createdAt ? new Date(b.latest.createdAt).getTime() : 0;
+    const dateA = new Date(a.latest?.createdAt ?? a.createdAt).getTime();
+    const dateB = new Date(b.latest?.createdAt ?? b.createdAt).getTime();
     return dateB - dateA || a.reference.localeCompare(b.reference);
   });
   return ok({ threads, viewerId: user.id });

@@ -8,15 +8,17 @@ import {
   MessageCircle, Paperclip, Search, Send, X, Archive, ArchiveRestore, Trash2, RotateCcw, AlertTriangle,
 } from 'lucide-react';
 import { api, json } from '@/api-client/http';
-import { subscribeToChatEvents } from '@/lib/live-events';
+import { subscribeToChatEvents } from '@/connection/events';
+import { sortChatThreads, isActiveTyping } from '@/connection/chat';
+import { signalTyping } from '@/connection/typing';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { ListSkeleton } from '@/components/ui/LoadingSkeleton';
 import styles from './MessagesPanel.module.css';
 
 type Role = 'CLIENT' | 'COORDINATOR' | 'ADMIN';
 type Thread = {
-  id: string; reference: string; clientName: string; eventType: string;
-  eventDate: string; status: string; source: string;
+  id: string; clientId: string | null; reference: string; clientName: string; eventType: string;
+  eventDate: string; createdAt: string; status: string; source: string;
   latest: { body: string; hasAttachment: boolean; senderId: string; createdAt: string } | null;
   unread: number; deletedAt: string | null; purgeAfter: string | null;
 };
@@ -43,19 +45,6 @@ function latestText(thread: Thread) {
   if (thread.latest.body.trim()) return thread.latest.body;
   return thread.latest.hasAttachment ? 'Sent a photo' : 'New message';
 }
-async function signalTyping(bookingId: string, typing: boolean) {
-  // Do not activate the global API spinner for a background typing pulse.
-  try {
-    await fetch('/api/messages/typing', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bookingId, typing }),
-      cache: 'no-store',
-    });
-  } catch { /* Typing is ephemeral; do not interrupt message composition. */ }
-}
-
 export default function MessagesPanel({ role, canOpenBooking = true }: { role: Role; canOpenBooking?: boolean }) {
   const search = useSearchParams();
   const requestedBooking = search.get('booking') || '';
@@ -71,9 +60,11 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
   const [sending, setSending] = useState(false);
   const [optimistic, setOptimistic] = useState<Message[]>([]);
   const selectedRef = useRef(selected);
+  const lastRequestedBookingRef = useRef('');
   selectedRef.current = selected;
   const [error, setError] = useState('');
-  const [typedBy, setTypedBy] = useState<Record<string, number>>({});
+  const [typingByThread, setTypingByThread] = useState<Record<string, Record<string, number>>>({});
+  const [realtimeOnline, setRealtimeOnline] = useState(false);
   const [tick, setTick] = useState(Date.now());
   const [mobileThread, setMobileThread] = useState(!!requestedBooking);
   const messageScrollRef = useRef<HTMLDivElement>(null);
@@ -94,13 +85,18 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
     ? api(`/api/messages?bookingId=${encodeURIComponent(selected)}`)
     : Promise.resolve({ viewerId: '', messages: [], reads: [], typing: [] }), [selected],
     { subscribeToChanges: false, refreshOnFocus: false, cacheKey: `${role}:/api/messages?bookingId=${selected}&view=${view}`, staleTimeMs: 12_000 });
-  const threads = all.data?.threads || [];
+  // A server refresh and an optimistic local send use the same newest-first order.
+  const threads = useMemo(() => sortChatThreads(all.data?.threads ?? []), [all.data]);
   const active = threads.find(t => t.id === selected);
   const text = drafts[selected] || '';
   const viewerId = conversation.data?.viewerId || all.data?.viewerId || '';
 
   useEffect(() => {
-    if (requestedBooking && threads.some(t => t.id === requestedBooking)) {
+    // A route query may select a booking ONCE. Live refreshes must not force
+    // the user back to that chat after they manually select another thread.
+    if (requestedBooking && lastRequestedBookingRef.current !== requestedBooking
+      && threads.some(t => t.id === requestedBooking)) {
+      lastRequestedBookingRef.current = requestedBooking;
       setSelected(requestedBooking);
       setMobileThread(true);
       return;
@@ -110,9 +106,14 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
   }, [requestedBooking, threads, selected, all.data]);
 
   useEffect(() => {
-    setAssetId(''); setFileLabel(''); setError(''); setTypedBy({});
+    setAssetId(''); setFileLabel(''); setError('');
     typingPulseRef.current = 0;
-    return () => { if (stopTypingRef.current) clearTimeout(stopTypingRef.current); };
+    return () => {
+      if (stopTypingRef.current) clearTimeout(stopTypingRef.current);
+      stopTypingRef.current = null;
+      if (typingPulseRef.current && selected) void signalTyping(selected, false);
+      typingPulseRef.current = 0;
+    };
   }, [selected]);
 
   useEffect(() => {
@@ -132,16 +133,30 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
     };
 
     const unsub = subscribeToChatEvents(event => {
-      if (event.kind === 'message' || event.kind === 'read') {
+      if (event.kind === 'disconnected') {
+        setRealtimeOnline(false);
+        return;
+      }
+      if (event.kind === 'connected') setRealtimeOnline(true);
+      if (event.kind === 'sync') {
+        // The channel reconnected (or missed writes during subscription).
+        // Refetch both views: initial HTTP responses may predate subscription.
+        queueRefresh(true);
+      }
+      if (event.kind === 'message' || event.kind === 'read' || event.kind === 'thread') {
         if (event.bookingId) queueRefresh(event.bookingId === selected);
       }
-      if (event.kind === 'typing' && event.bookingId === selected && event.userId && event.userId !== viewerId) {
-        setTypedBy(prev => {
-          const updated = { ...prev };
-          if (event.typing && event.expiresAt) updated[event.userId!] = new Date(event.expiresAt).getTime();
-          else updated[event.userId!] = 0;
-          return updated;
-        });
+      if (event.kind === 'typing' && event.bookingId && event.userId && event.userId !== viewerId) {
+        const bookingId = event.bookingId;
+        const userId = event.userId;
+        setTypingByThread(previous => ({
+          ...previous,
+          [bookingId]: {
+            ...(previous[bookingId] || {}),
+            [userId]: event.typing && event.expiresAt ? new Date(event.expiresAt).getTime() : 0,
+          },
+        }));
+        setTick(Date.now());
       }
     });
     return () => {
@@ -215,20 +230,30 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
     return threads.filter(thread => thread.clientName.toLocaleLowerCase().includes(name));
   }, [threads, searchTerm]);
   const unreadTotal = threads.reduce((sum, t) => sum + t.unread, 0);
-  const othersTyping = Object.entries(typedBy).some(([id, expiry]) => id !== viewerId && expiry > tick)
-    || !!conversation.data?.typing.some(t => t.userId !== viewerId && typedBy[t.userId] === undefined && new Date(t.expiresAt).getTime() > tick);
+  const typedBy = typingByThread[selected] || {};
+  const othersTyping = Object.entries(typedBy).some(([id, expiry]) => id !== viewerId && isActiveTyping(expiry, tick))
+    || !!conversation.data?.typing.some(t => t.userId !== viewerId && typedBy[t.userId] === undefined && isActiveTyping(t.expiresAt, tick));
+  const anyTyping = Object.values(typingByThread).some(peers =>
+    Object.entries(peers).some(([id, expiry]) => id !== viewerId && isActiveTyping(expiry, tick))) || othersTyping;
 
-  // Do not re-render an entire conversation every second when no one is typing.
+  // Typing events expire naturally even if the remote browser loses power.
+  // No inbox/conversation refetch is made for each keystroke.
   useEffect(() => {
-    if (!othersTyping) return;
+    if (!anyTyping) return;
     const timer = window.setInterval(() => setTick(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [othersTyping]);
+  }, [anyTyping]);
 
   function changeDraft(value: string) {
     setDrafts(previous => ({ ...previous, [selected]: value }));
     if (!selected) return;
-    if (!value.trim()) { void signalTyping(selected, false); return; }
+    if (!value.trim()) {
+      if (stopTypingRef.current) clearTimeout(stopTypingRef.current);
+      stopTypingRef.current = null;
+      if (typingPulseRef.current) void signalTyping(selected, false);
+      typingPulseRef.current = 0;
+      return;
+    }
     if (Date.now() - typingPulseRef.current >= 2300) {
       typingPulseRef.current = Date.now();
       void signalTyping(selected, true);
@@ -252,7 +277,7 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
     finally { setActionBusy(false); }
   }
   function switchThread(id: string) {
-    if (id !== selected && selected && text.trim()) void signalTyping(selected, false);
+    if (id !== selected && selected && typingPulseRef.current) void signalTyping(selected, false);
     setSelected(id); setMobileThread(true);
     setError('');
   }
@@ -308,6 +333,7 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
             senderId: viewerId, createdAt: String(response.message.createdAt) },
         } : thread) } : prev);
       setOptimistic(prev => prev.filter(m => m.id !== tempId));
+      if (view === 'archived') setView('inbox'); // Sending unarchives the thread for everyone.
       inputRef.current?.focus();
     } catch (caught) {
       setOptimistic(prev => prev.filter(m => m.id !== tempId));
@@ -329,6 +355,12 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
   }
   const messages = [...(conversation.data?.messages || []), ...optimistic.filter(m => m.bookingId === selected)];
   const lastOwn = [...messages].reverse().find(m => m.senderId === viewerId)?.id;
+  const typingUserId = Object.entries(typedBy).find(([id, expiry]) =>
+    id !== viewerId && isActiveTyping(expiry, tick))?.[0]
+    ?? conversation.data?.typing.find(t => t.userId !== viewerId && isActiveTyping(t.expiresAt, tick))?.userId;
+  const typingName = role === 'CLIENT' ? 'DM Events team'
+    : typingUserId && active?.clientId === typingUserId ? active.clientName
+    : messages.find(m => m.senderId === typingUserId)?.senderName || 'DM Events team';
   let previousDay = '';
 
   return <main className={styles.page} aria-label="DM Events messaging" data-messenger-edge-to-edge="true">
@@ -338,7 +370,7 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
           <div className={styles.sidebarTitle}>
             <Link href={role === 'CLIENT' ? '/client' : role === 'ADMIN' ? '/admin' : '/coordinator'}
               aria-label="Return to portal" title="Return to portal" className={styles.exitLink}><ArrowLeft size={19}/></Link>
-            <h2>Inbox</h2>{unreadTotal > 0 && <span className={styles.totalCount}>{unreadTotal}</span>}
+            <h2>Inbox</h2>{!realtimeOnline && <span role="status" className={styles.reference}>Reconnecting…</span>}{unreadTotal > 0 && <span className={styles.totalCount}>{unreadTotal}</span>}
           </div>
           <p>Stay connected with every booking.</p>
           <nav className={styles.folderTabs} aria-label="Conversation folders">
@@ -361,7 +393,10 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
               <span className={styles.threadInfo}>
                 <span className={styles.threadTop}><strong>{title}</strong><small>{thread.latest?.createdAt ? formatDate(thread.latest.createdAt) : ''}</small></span>
                 <span className={styles.reference}>{thread.reference} · {thread.eventType}</span>
-                <span className={styles.preview}>{view==='trash' ? `Permanently deleted ${thread.purgeAfter ? formatDate(thread.purgeAfter) : 'after 30 days'}` : latestText(thread)}</span>
+                <span className={styles.preview}>{view==='trash'
+                  ? `Permanently deleted ${thread.purgeAfter ? formatDate(thread.purgeAfter) : 'after 30 days'}`
+                  : Object.entries(typingByThread[thread.id] || {}).some(([id, expiry]) => id !== viewerId && isActiveTyping(expiry, tick))
+                    ? 'Typing…' : latestText(thread)}</span>
               </span>
               {thread.unread > 0 && <span className={styles.unread} aria-label={`${thread.unread} unread messages`}>{thread.unread > 99 ? '99+' : thread.unread}</span>}
             </button>;
@@ -422,7 +457,7 @@ export default function MessagesPanel({ role, canOpenBooking = true }: { role: R
                 </div>
               </div>;
             })}
-            {othersTyping && <div className={styles.typing}><span className={styles.typingDots}><i/><i/><i/></span><span>{role === 'CLIENT' ? 'DM Events is typing' : 'Someone is typing'}…</span></div>}
+            {othersTyping && <div className={styles.typing}><span className={styles.typingDots}><i/><i/><i/></span><span>{typingName} is typing…</span></div>}
           </div>}
           {view !== 'trash' && error && <div className={styles.composeError} role="alert">{error}<button type="button" aria-label="Dismiss error" onClick={() => setError('')}><X size={15}/></button></div>}
           {view !== 'trash' && <form className={styles.composer} onSubmit={send}>

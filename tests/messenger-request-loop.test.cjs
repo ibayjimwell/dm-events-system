@@ -7,6 +7,7 @@ const read = file => readFileSync(join(__dirname, '..', file), 'utf8');
 
 const files = [
   'app/api/events/route.ts',
+  'src/connection/bridge.ts',
   'app/(portal)/admin/layout.tsx',
   'src/hooks/useLiveQuery.ts',
   'src/components/shared/MessagesPanel.tsx',
@@ -46,11 +47,11 @@ test('general queries keep default live invalidation and request safety', () => 
 });
 
 test('opening a Supabase stream does not masquerade as a database mutation', () => {
-  const server = read('app/api/events/route.ts');
+  const server = read('src/connection/bridge.ts');
   assert.doesNotMatch(server, /write\('change',\s*\{\s*kind:\s*'connected'/);
   assert.match(server, /postgres_changes/);
   assert.match(server, /kind: 'typing'/);
-  assert.match(server, /kind: 'read'/);
+  assert.match(server, /emitChat\(row\?\.booking_id, 'read'/);
 });
 
 test('admin layout imports its messenger frame and chat links cannot automatically prefetch the same RSC route', () => {
