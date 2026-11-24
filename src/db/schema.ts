@@ -261,9 +261,8 @@ export const bookingHistory = pgTable(
     bookingId: uuid("booking_id")
       .notNull()
       .references((): AnyPgColumn => bookings.id, { onDelete: "cascade" }),
-    actorId: uuid("actor_id")
-      .notNull()
-      .references(() => users.id),
+    // NULL means an automated system transition (see migration 0014).
+    actorId: uuid("actor_id").references(() => users.id),
     fromStatus: statuses("from_status"),
     toStatus: statuses("to_status").notNull(),
     note: text("note"),

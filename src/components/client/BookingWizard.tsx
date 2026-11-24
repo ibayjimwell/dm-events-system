@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { api, json } from '@/api-client/http';
 import { assertAvailableDate } from '@/api-client/bookingAvailability';
+import { bookingWindowRejection, bookingWindowError } from '@/lib/bookingWindow';
 import { uploadImage } from '@/api-client/uploadImage';
 import AvailableDatePicker from '@/components/ui/AvailableDatePicker';
 import PackageImageCarousel from '@/components/ui/PackageImageCarousel';
@@ -67,9 +68,6 @@ function readableDate(iso: string): string {
   const [year, month, day] = iso.split('-').map(Number);
   return new Intl.DateTimeFormat('en-PH', { dateStyle: 'full', timeZone: 'UTC' })
     .format(new Date(Date.UTC(year, month - 1, day, 12)));
-}
-function todayInManila() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 }
 
 export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'COORDINATOR' } = {}) {
@@ -175,8 +173,9 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
       return;
     }
     if (step === 2) {
-      if (!form.eventDate || form.eventDate < todayInManila()) {
-        setError('Select today or a future available event date.'); return;
+      const dateError = bookingWindowRejection(form.eventDate);
+      if (dateError) {
+        setError(bookingWindowError(dateError)); return;
       }
       setBusy(true);
       try {
@@ -252,8 +251,9 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
       setError('Your selected package is no longer available. Please choose again.');
       move(1); return;
     }
-    if (!form.eventDate || form.eventDate < todayInManila()) {
-      setError('Your event date is invalid. Please select an available date.');
+    const dateError = bookingWindowRejection(form.eventDate);
+    if (dateError) {
+      setError(bookingWindowError(dateError));
       move(2); return;
     }
     submitting.current = true;
@@ -281,7 +281,7 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
       }
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : 'Your request could not be submitted.';
-      if (/date.*(held|confirmed|unavailable)|already.*(held|confirmed)|choose an available date/i.test(message)) {
+      if (/date.*(held|confirmed|unavailable)|already.*(held|confirmed)|choose an available date|three months|event date between|past dates/i.test(message)) {
         setForm(previous => ({ ...previous, eventDate: '' }));
         move(2);
       } else if (/package unavailable|package.*no longer/i.test(message)) {

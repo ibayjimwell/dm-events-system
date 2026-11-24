@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CalendarDays, Check, ChevronLeft, ChevronRight, RefreshCw, X } from 'lucide-react';
 import { api } from '@/api-client/http';
+import { bookingWindow, manilaToday } from '@/lib/bookingWindow';
 
 type Reservation = { date: string; status: 'HELD' | 'CONFIRMED' };
-type MonthResponse = { month: string; blockedDates: Reservation[] };
+type MonthResponse = { month: string; blockedDates: Reservation[]; minDate: string; maxDate: string };
 type Props = {
   id: string;
   value: string;
@@ -16,9 +17,9 @@ type Props = {
   display?: 'inline' | 'modal';
 };
 
-const todayInManila = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 const pad = (n: number) => String(n).padStart(2, '0');
-const currentMonth = () => todayInManila().slice(0, 7);
+const currentMonth = () => manilaToday().slice(0, 7);
+const clampMonth = (month: string, min: string, max: string) => month < min ? min : month > max ? max : month;
 function shiftMonth(month: string, offset: number) {
   const [year, number] = month.split('-').map(Number);
   const shifted = new Date(Date.UTC(year, number - 1 + offset, 1));
@@ -42,8 +43,12 @@ export default function AvailableDatePicker({
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const [opened, setOpened] = useState(false);
-  const [month, setMonth] = useState(() => value ? value.slice(0, 7) : currentMonth());
+  const [month, setMonth] = useState(() => {
+    const { minDate, maxDate } = bookingWindow();
+    return clampMonth(value ? value.slice(0, 7) : currentMonth(), minDate.slice(0, 7), maxDate.slice(0, 7));
+  });
   const [blocked, setBlocked] = useState<Reservation[]>([]);
+  const [range, setRange] = useState(() => bookingWindow());
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
   const [notice, setNotice] = useState('');
@@ -57,7 +62,9 @@ export default function AvailableDatePicker({
   }, []);
   const open = () => {
     if (disabled) return;
-    setMonth(value ? value.slice(0, 7) : currentMonth());
+    const fresh = bookingWindow();
+    setRange(fresh);
+    setMonth(clampMonth(value ? value.slice(0, 7) : currentMonth(), fresh.minDate.slice(0, 7), fresh.maxDate.slice(0, 7)));
     setLoading(true);
     setBlocked([]);
     setNotice('');
@@ -79,7 +86,11 @@ export default function AvailableDatePicker({
     }).then((result) => {
       if (controller.signal.aborted) return;
       setBlocked(result.blockedDates);
-      if (value && value.startsWith(`${month}-`) && result.blockedDates.some(item => item.date === value)) {
+      setRange({ minDate: result.minDate, maxDate: result.maxDate });
+      const expectedMonth = clampMonth(month, result.minDate.slice(0, 7), result.maxDate.slice(0, 7));
+      if (expectedMonth !== month) setMonth(expectedMonth);
+      if (value && (value < result.minDate || value > result.maxDate ||
+          (value.startsWith(`${month}-`) && result.blockedDates.some(item => item.date === value)))) {
         onChange('');
         setNotice('Your previously selected date is now unavailable. Choose another date.');
       }
@@ -95,7 +106,12 @@ export default function AvailableDatePicker({
 
   useEffect(() => {
     if (!visible) return;
-    const reload = () => setRefresh(value => value + 1);
+    const reload = () => {
+      const fresh = bookingWindow();
+      setRange(fresh);
+      setMonth(current => clampMonth(current, fresh.minDate.slice(0, 7), fresh.maxDate.slice(0, 7)));
+      setRefresh(value => value + 1);
+    };
     const onVisibility = () => { if (document.visibilityState === 'visible') reload(); };
     window.addEventListener('focus', reload);
     document.addEventListener('visibilitychange', onVisibility);
@@ -105,11 +121,36 @@ export default function AvailableDatePicker({
     };
   }, [visible]);
 
+  // Keep a calendar left open across midnight accurate without a page reload.
+  // Foreground/focus refreshes above also handle sleeping or backgrounded tabs.
+  useEffect(() => {
+    if (!visible) return;
+    let lastDay = range.minDate;
+    const timer = window.setInterval(() => {
+      const fresh = bookingWindow();
+      if (fresh.minDate === lastDay) return;
+      lastDay = fresh.minDate;
+      setRange(fresh);
+      setMonth(current => clampMonth(current, fresh.minDate.slice(0, 7), fresh.maxDate.slice(0, 7)));
+      setRefresh(value => value + 1);
+      if (value && (value < fresh.minDate || value > fresh.maxDate)) {
+        onChange('');
+        setNotice('The booking date range has changed. Please choose an available date.');
+      }
+    }, 60_000);
+    return () => window.clearInterval(timer);
+    // Only restart for newly opened calendars or a new business day.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, range.minDate]);
+
   const [year, monthNumber] = month.split('-').map(Number);
   const daysInMonth = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
   const dayOffset = new Date(Date.UTC(year, monthNumber - 1, 1)).getUTCDay();
   const days = Array.from({ length: dayOffset + daysInMonth }, (_, index) => index < dayOffset ? null : index - dayOffset + 1);
-  const today = todayInManila();
+  const today = range.minDate;
+  const maxDate = range.maxDate;
+  const firstMonth = today.slice(0, 7);
+  const lastMonth = maxDate.slice(0, 7);
   const reserved = new Map<string, Reservation['status']>(blocked.map(item => [item.date, item.status]));
   const title = new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric', timeZone: 'UTC' })
     .format(new Date(Date.UTC(year, monthNumber - 1, 1)));
@@ -117,13 +158,13 @@ export default function AvailableDatePicker({
   const calendar = (
     <div className="min-w-0 p-4 sm:p-6" aria-busy={loading}>
       <div className="mb-5 flex items-center justify-between gap-3">
-        <button type="button" aria-label="Previous month" disabled={month <= currentMonth() || disabled}
+        <button type="button" aria-label="Previous month" disabled={month <= firstMonth || disabled}
           onClick={() => { setMonth(current => shiftMonth(current, -1)); setLoading(true); }}
           className="flex size-11 items-center justify-center rounded-xl border border-[#d9e3ed] bg-white text-[#1b3d5e] transition hover:border-[#0b4d98] disabled:opacity-30">
           <ChevronLeft size={19} />
         </button>
         <div className="text-center"><p className="text-[11px] font-bold uppercase tracking-[.16em] text-[#a18b59]">EVENT CALENDAR</p><h3 className="mt-1 text-base font-bold text-[#102d48] sm:text-lg">{title}</h3></div>
-        <button type="button" aria-label="Next month" disabled={disabled}
+        <button type="button" aria-label="Next month" disabled={month >= lastMonth || disabled}
           onClick={() => { setMonth(current => shiftMonth(current, 1)); setLoading(true); }}
           className="flex size-11 items-center justify-center rounded-xl border border-[#d9e3ed] bg-white text-[#1b3d5e] transition hover:border-[#0b4d98] disabled:opacity-30">
           <ChevronRight size={19} />
@@ -136,9 +177,10 @@ export default function AvailableDatePicker({
           const iso = `${month}-${pad(day)}`;
           const status = reserved.get(iso);
           const past = iso < today;
+          const beyondLimit = iso > maxDate;
           const selected = value === iso;
-          const unavailable = !!status || past || !!fetchError || disabled;
-          const state = status === 'CONFIRMED' ? 'Confirmed' : status === 'HELD' ? 'Held' : past ? 'Past date' : 'Available';
+          const unavailable = !!status || past || beyondLimit || !!fetchError || disabled;
+          const state = status === 'CONFIRMED' ? 'Confirmed' : status === 'HELD' ? 'Held' : past ? 'Past date' : beyondLimit ? 'Beyond the 3-month booking limit' : 'Available';
           return (
             <button key={iso} type="button" aria-pressed={selected} aria-label={`${formatDate(iso)} — ${state}`}
               title={`${formatDate(iso)} — ${state}`} disabled={unavailable}
@@ -148,7 +190,7 @@ export default function AvailableDatePicker({
                 selected && !unavailable ? 'border-[#0b4d98] bg-[#0b4d98] text-white shadow-md' :
                 status === 'CONFIRMED' ? 'cursor-not-allowed border-red-200 bg-red-50 text-red-700 line-through' :
                 status === 'HELD' ? 'cursor-not-allowed border-amber-200 bg-amber-50 text-amber-800 line-through' :
-                past ? 'cursor-not-allowed border-transparent bg-[#f1f4f7] text-[#a5b1bd]' :
+                (past || beyondLimit) ? 'cursor-not-allowed border-transparent bg-[#f1f4f7] text-[#a5b1bd]' :
                 unavailable ? 'cursor-not-allowed border-[#e8ebef] bg-[#f7f8fa] text-[#8594a3]' :
                 'border-[#e1e8f0] bg-white text-[#17324c] hover:border-[#0b4d98] hover:bg-[#edf5ff]',
               ].join(' ')}>
@@ -159,6 +201,7 @@ export default function AvailableDatePicker({
           );
         })}
       </div>
+      <p className="mt-4 text-center text-xs text-[#506a80]">Booking dates: <strong>{formatDate(today)}</strong> through <strong>{formatDate(maxDate)}</strong> (three months, Philippine time).</p>
       {loading && <p className="mt-4 text-center text-sm text-[#647b90]" role="status">Checking available dates…</p>}
       {fetchError && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{fetchError}</p>}
       {notice && <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">{notice}</p>}
@@ -179,7 +222,7 @@ export default function AvailableDatePicker({
     return (
       <div className="min-w-0">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-          <div><p className="text-sm font-bold text-[#17324c]">{label}</p><p className="mt-1 text-xs text-[#748498]">Held and Confirmed dates cannot be selected.</p></div>
+          <div><p className="text-sm font-bold text-[#17324c]">{label}</p><p className="mt-1 text-xs text-[#748498]">Only dates within the next three months can be booked. Held and Confirmed dates are unavailable.</p></div>
           {value && <span className="rounded-lg bg-[#e8f3ee] px-3 py-2 text-xs font-bold text-[#1a7055]">{formatDate(value)}</span>}
         </div>
         <div className="overflow-hidden rounded-2xl border border-[#dfe7ee] bg-[#fbfcfe] shadow-sm">{calendar}</div>
@@ -196,7 +239,7 @@ export default function AvailableDatePicker({
         <span className={`min-w-0 truncate ${value ? 'font-medium text-[#122c44]' : 'text-[#8294a5]'}`}>{value ? formatDate(value) : 'Choose an available date'}</span>
         <CalendarDays size={19} className="shrink-0 text-[#0b4d98]" aria-hidden="true" />
       </button>
-      <p className="mt-1.5 text-xs text-[#748498]">Held and confirmed dates are unavailable.</p>
+      <p className="mt-1.5 text-xs text-[#748498]">Available dates are limited to the next three months. Held and Confirmed dates are blocked.</p>
       <dialog ref={dialog} onClose={() => setOpened(false)}
         onClick={event => { if (event.target === dialog.current) close(); }}
         aria-label="Choose an available event date"

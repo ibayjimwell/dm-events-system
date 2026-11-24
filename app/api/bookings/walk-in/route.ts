@@ -1,4 +1,4 @@
-import {requireAvailableBookingDate} from '@/lib/bookingAvailability';
+import {requireAvailableBookingDate,requireBookingDateWithinWindow} from '@/lib/bookingAvailability';
 import {randomBytes} from 'node:crypto';
 import {and,eq} from 'drizzle-orm';
 import {db} from '@/db';
@@ -21,6 +21,8 @@ export const POST=route(async(req)=>{
  await checkAuthLimit('walk-in-booking:'+staff.id,30); // Basic operational abuse guard.
  const reference=`DEM-${new Date().getFullYear()}-${randomBytes(4).toString('hex').toUpperCase()}`;
  const [booking]=await db.transaction(async tx=>{
+  // Revalidate against Date.now() inside the write transaction at midnight.
+  requireBookingDateWithinWindow(v.eventDate);
   const [row]=await tx.insert(bookings).values({reference,source:'WALK_IN',clientId:null,createdBy:staff.id,contactName:v.contactName,contactEmail:v.contactEmail,contactPhone:v.contactPhone,eventType:v.eventType,eventDate:v.eventDate,guestCount:v.guestCount,venue:v.venue,venueLatitude:v.venueLatitude??null,venueLongitude:v.venueLongitude??null,estimatedBudget:v.estimatedBudget,packageId:v.packageId||null,preferredTheme:v.preferredTheme,colorPalette:v.colorPalette,specialRequests:v.specialRequests,inspirationAssetId:v.inspirationAssetId||null,privacyConsentedAt:new Date()}).returning();
   await tx.insert(bookingHistory).values({bookingId:row.id,actorId:staff.id,toStatus:'TENTATIVE',note:'Walk-in inquiry recorded by authorized staff; client has no website account'});
   if(v.inspirationAssetId)await tx.update(mediaAssets).set({bookingId:row.id}).where(eq(mediaAssets.id,v.inspirationAssetId));

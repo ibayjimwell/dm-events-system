@@ -110,6 +110,7 @@ test('cron rejects unauthenticated traffic, skips non-scheduled days, and create
   const env = { CRON_SECRET: 'z'.repeat(32) };
   let frequency = 'weekly';
   let saved = 0;
+  let expiredRuns = 0;
   const cron = load('app/api/cron/daily-backup/route.ts', {
     '@/lib/managedBackupStore': {
       managedBackupConfig: () => ({ ready: true }),
@@ -117,20 +118,24 @@ test('cron rejects unauthenticated traffic, skips non-scheduled days, and create
       createStoredBackup: async () => { saved++; return { alreadyExisted: false, backup: { path: 'automatic/example.json.gz.enc' } }; },
     },
     '@/lib/backupSchedule': { shouldRunBackup: value => value === 'daily' },
+    '@/lib/overdueBookings': { cancelOverdueBookings: async () => { expiredRuns++; return { today: '2026-11-24', cancelled: 2, confirmedReversed: 1, complete: true }; } },
   }, env);
   const noAuth = await cron.GET(new Request('https://example.com/api/cron/daily-backup'));
   assert.equal(noAuth.status, 401);
   assert.equal(saved, 0);
+  assert.equal(expiredRuns, 0);
   const auth = { Authorization: 'Bearer ' + env.CRON_SECRET };
   const skipped = await cron.GET(new Request('https://example.com/api/cron/daily-backup', { headers: auth }));
   assert.equal(skipped.status, 200);
   assert.equal((await skipped.json()).skipped, true);
   assert.equal(saved, 0);
+  assert.equal(expiredRuns, 1, 'expiration runs even on days that skip backup');
   frequency = 'daily';
   const completed = await cron.GET(new Request('https://example.com/api/cron/daily-backup', { headers: auth }));
   assert.equal(completed.status, 200);
   assert.equal((await completed.json()).skipped, false);
   assert.equal(saved, 1);
+  assert.equal(expiredRuns, 2);
 });
 
 test('schedule PATCH cannot be used without backup permission and validates the input', async () => {

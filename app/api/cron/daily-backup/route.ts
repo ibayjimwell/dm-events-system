@@ -1,5 +1,6 @@
 import { createStoredBackup, getStoredBackupSchedule, managedBackupConfig } from '@/lib/managedBackupStore';
 import { shouldRunBackup } from '@/lib/backupSchedule';
+import { cancelOverdueBookings } from '@/lib/overdueBookings';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,21 +17,33 @@ export async function GET(req: Request) {
   if (secret.length < 16 || incoming !== `Bearer ${secret}`) {
     return Response.json({ error: 'Unauthorized' }, { status: 401, headers: { 'Cache-Control': 'no-store' } });
   }
+  // Expiry runs every day, including Weekly/Monthly backup days and when
+  // backup storage is unavailable. Never tie booking integrity to backups.
+  let expired: Awaited<ReturnType<typeof cancelOverdueBookings>>;
+  try {
+    expired = await cancelOverdueBookings();
+  } catch (error) {
+    console.error('[DM Events] Automatic overdue booking cancellation failed:', error);
+    return Response.json({ ok: false, error: 'Overdue booking reconciliation failed. Check the database migration and Vercel logs.' }, {
+      status: 500, headers: { 'Cache-Control': 'no-store' },
+    });
+  }
   try {
     if (!managedBackupConfig().ready) {
-      return Response.json({ ok: false, error: 'Backup storage is not configured. Check the Production environment variables.' }, {
+      return Response.json({ ok: false, expired, error: 'Backup storage is not configured. Check the Production environment variables.' }, {
         status: 503, headers: { 'Cache-Control': 'no-store' },
       });
     }
     const schedule = await getStoredBackupSchedule();
     if (!shouldRunBackup(schedule.frequency)) {
-      return Response.json({ ok: true, skipped: true, frequency: schedule.frequency, message: 'Not scheduled for today in Asia/Manila.' }, {
+      return Response.json({ ok: true, expired, skipped: true, frequency: schedule.frequency, message: 'Not scheduled for today in Asia/Manila.' }, {
         headers: { 'Cache-Control': 'no-store' },
       });
     }
     const result = await createStoredBackup('automatic');
     return Response.json({
       ok: true,
+      expired,
       skipped: false,
       frequency: schedule.frequency,
       alreadyExisted: result.alreadyExisted,
@@ -39,7 +52,7 @@ export async function GET(req: Request) {
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error('[DM Events scheduled backup] Automatic snapshot failed:', error);
-    return Response.json({ ok: false, error: 'Scheduled backup failed. Review Vercel function logs.' }, {
+    return Response.json({ ok: false, expired, error: 'Scheduled backup failed. Review Vercel function logs.' }, {
       status: 500, headers: { 'Cache-Control': 'no-store' },
     });
   }

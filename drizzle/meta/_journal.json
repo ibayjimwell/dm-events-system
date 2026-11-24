@@ -99,6 +99,13 @@
       "when": 1793820000000,
       "tag": "0013_backup_history_schedule",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795564800000,
+      "tag": "0014_booking_window_auto_expiry",
+      "breakpoints": true
     }
   ]
 }

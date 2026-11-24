@@ -8,6 +8,8 @@ import { notificationRows } from '@/lib/notifications/enqueue';
 import { tryImmediateDelivery } from '@/lib/notifications/worker';
 import { valueMovement } from '@/lib/confirmedValue';
 import { canMarkCompleted } from '@/lib/bookingCompletion';
+import { manilaToday } from '@/lib/bookingWindow';
+import { requireBookingDateWithinWindow } from '@/lib/bookingAvailability';
 
 /** Atomic status, history, notification intent and confirmed-value accounting. */
 export const POST = route(async (req, ctx: { params: Promise<{ id: string }> }) => {
@@ -31,6 +33,16 @@ export const POST = route(async (req, ctx: { params: Promise<{ id: string }> }) 
       }
       if (before.status === 'CONFIRMED' && !['CONFIRMED', 'COMPLETED', 'CANCELLED'].includes(input.status)) {
         throw new HttpError(409, 'A confirmed event may be edited or cancelled, but cannot be silently moved back to inquiry/hold.');
+      }
+      // A missed event is no longer eligible for completion or reactivation.
+      // The daily cron will reconcile any outstanding older records.
+      if (before.eventDate < manilaToday() && input.status !== 'CANCELLED') {
+        throw new HttpError(409, 'The event date is in the past. Overdue bookings are automatically cancelled.');
+      }
+      // Grandfather previously scheduled future bookings, but do not allow a
+      // new Held/Confirmed reservation outside the rolling booking window.
+      if (before.status !== input.status && (input.status === 'HELD' || input.status === 'CONFIRMED')) {
+        requireBookingDateWithinWindow(before.eventDate);
       }
       if (input.status === 'COMPLETED' && !canMarkCompleted(before.status, before.eventDate)) {
         throw new HttpError(409, 'Only confirmed bookings on or after their event date (Philippine time) can be marked Completed.');

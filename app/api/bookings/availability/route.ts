@@ -5,6 +5,7 @@ import {
   dateReservation,
   reservedDatesForMonth,
 } from '@/lib/bookingAvailability';
+import { bookingWindow, bookingWindowRejection } from '@/lib/bookingWindow';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,12 +15,13 @@ export const GET = route(async (request) => {
   const month = params.get('month');
   if (month !== null) {
     if (!isISOMonth(month)) throw new HttpError(400, 'Valid month required (YYYY-MM).');
-    return ok({ month, blockedDates: await reservedDatesForMonth(month) });
+    return ok({ month, ...bookingWindow(), blockedDates: await reservedDatesForMonth(month) });
   }
 
   // Preserve the previously introduced date query for other screens.
   const date = params.get('date') ?? '';
   if (!isISODate(date)) throw new HttpError(400, 'Valid date required (YYYY-MM-DD).');
   const status = await dateReservation(date);
-  return ok({ date, available: status === null, status });
+  const reason = bookingWindowRejection(date);
+  return ok({ date, available: status === null && reason === null, status, reason, ...bookingWindow() });
 });

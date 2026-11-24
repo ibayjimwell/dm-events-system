@@ -42,20 +42,33 @@ const database = {
 };
 class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }
 
+// Fixed Philippine date keeps historical fixture dates deterministic.
+class TestDate extends Date {
+  constructor(...args) { super(...(args.length ? args : ['2027-10-14T16:00:00.000Z'])); }
+  static now() { return new Date('2027-10-14T16:00:00.000Z').getTime(); }
+}
+
 function loadServerAvailability() {
   const file = path.join(root, 'src/lib/bookingAvailability.ts');
   const compiled = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
   }).outputText;
   const mod = { exports: {} };
+  const bookingWindowFile = path.join(root, 'src/lib/bookingWindow.ts');
+  const bookingWindowJs = ts.transpileModule(fs.readFileSync(bookingWindowFile, 'utf8'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+  }).outputText;
+  const windowMod = { exports: {} };
+  vm.runInNewContext(bookingWindowJs, { exports: windowMod.exports, module: windowMod, Date: TestDate, Intl, Error, Number });
   const requireMock = (name) => {
+    if (name === '@/lib/bookingWindow') return windowMod.exports;
     if (name === 'drizzle-orm') return filterLib;
     if (name === '@/db') return { db: database };
     if (name === '@/db/schema') return { bookings: { eventDate: 'eventDate', status: 'status' } };
     if (name === '@/lib/http') return { HttpError };
     throw new Error('Unknown dependency: ' + name);
   };
-  vm.runInNewContext(compiled, { exports: mod.exports, module: mod, require: requireMock, Date, Intl, Map, Error });
+  vm.runInNewContext(compiled, { exports: mod.exports, module: mod, require: requireMock, Date: TestDate, Intl, Map, Error });
   return mod.exports;
 }
 
@@ -88,6 +101,8 @@ test('server rejects occupied date with 409, accepts a free date', async () => {
   const occupied='2027-10-30';
   await assert.rejects(availability.requireAvailableBookingDate(occupied), (e) => e.status === 409);
   await availability.requireAvailableBookingDate('2027-11-03');
+  await assert.rejects(availability.requireAvailableBookingDate('2028-10-10'), (e) => e.status === 400 && /three months/i.test(e.message));
+  await assert.rejects(availability.requireAvailableBookingDate('2027-10-14'), (e) => e.status === 400 && /Past dates/i.test(e.message));
 });
 
 test('both booking APIs use server-side reservation validation', () => {

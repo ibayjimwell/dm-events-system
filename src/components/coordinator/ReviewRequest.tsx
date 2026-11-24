@@ -25,7 +25,7 @@ type Detail = {
   reviewNote: string | null; cancellationRequestedAt: string | null; cancellationReason: string | null;
   client: { fullName: string; email: string; phone: string | null };
   package: { name: string } | null;
-  history: { id: string; toStatus: string; note: string | null; actorName: string; createdAt: string }[];
+  history: { id: string; toStatus: string; note: string | null; actorName: string | null; createdAt: string }[];
 };
 
 export default function ReviewRequest({ id, role, canUpdateStatus = true, canMessage = true, canViewList = true }: {

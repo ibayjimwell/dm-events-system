@@ -1,4 +1,4 @@
-import {requireAvailableBookingDate} from '@/lib/bookingAvailability';
+import {requireAvailableBookingDate,requireBookingDateWithinWindow} from '@/lib/bookingAvailability';
 import {route,ok,readJson,HttpError} from '@/lib/http';
 import {requireActor,audit,checkAuthLimit} from '@/lib/auth';
 import {requirePermission,can} from '@/lib/access';
@@ -30,6 +30,8 @@ export const POST=route(async(req)=>{
   await checkAuthLimit('online-booking:'+user.id,5); // Max 5 submissions per 15 minutes.
   const reference=`DEM-${new Date().getFullYear()}-${randomBytes(4).toString('hex').toUpperCase()}`;
   const [created]=await db.transaction(async tx=>{
+    // Revalidate against Date.now() inside the write transaction at midnight.
+    requireBookingDateWithinWindow(values.eventDate);
     const [booking]=await tx.insert(bookings).values({reference,source:'ONLINE',createdBy:user.id,clientId:user.id,contactName:values.contactName,contactEmail:values.contactEmail,contactPhone:values.contactPhone,eventType:values.eventType,eventDate:values.eventDate,guestCount:values.guestCount,venue:values.venue,venueLatitude:values.venueLatitude??null,venueLongitude:values.venueLongitude??null,estimatedBudget:values.estimatedBudget,packageId:values.packageId||null,preferredTheme:values.preferredTheme,colorPalette:values.colorPalette,specialRequests:values.specialRequests,inspirationAssetId:values.inspirationAssetId||null,privacyConsentedAt:new Date()}).returning();
     await tx.insert(bookingHistory).values({bookingId:booking.id,actorId:user.id,toStatus:'TENTATIVE',note:'Client booking inquiry submitted'});
     if(values.inspirationAssetId)await tx.update(mediaAssets).set({bookingId:booking.id}).where(eq(mediaAssets.id,values.inspirationAssetId));
