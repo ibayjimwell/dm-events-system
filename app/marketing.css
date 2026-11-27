@@ -63,6 +63,11 @@
 .dm-inclusion-list svg { flex-shrink: 0; color: #a27a49; margin-top: 2px; }
 .dm-showcase-card__link { display: flex; justify-content: space-between; align-items: center; color: #143b58; text-decoration: none; font-size: 13px; font-weight: 750; }
 .dm-showcase-card__link:hover { color: #9c6634; }
+.dm-showcase-card__actions { display: grid; gap: 12px; margin-top: auto; }
+.dm-showcase-card__request { display: flex; justify-content: space-between; align-items: center; gap: 9px; padding: 12px 14px; border-radius: 8px; background: #123a59; color: white; text-decoration: none; font-size: 13px; font-weight: 750; transition: background-color .15s ease; }
+.dm-showcase-card__request:hover { background: #0d547d; }
+.dm-showcase-card__request:focus-visible { outline: 3px solid #cba56c; outline-offset: 3px; }
+
 .dm-empty-packages { padding: 58px 18px; text-align: center; border: 1px dashed #d8c8b4; margin-top: 35px; }
 .dm-empty-packages > svg { color: #b79360; margin-inline: auto; }
 .dm-empty-packages h3 { font-size: 29px; margin: 12px 0; }
@@ -170,6 +175,7 @@
 .dm-marketing--preview .dm-showcase-card__body h3 { font-size: 13px !important; }
 .dm-marketing--preview .dm-inclusion-list { display: none; }
 .dm-marketing--preview .dm-showcase-card__link { font-size: 8px; }
+.dm-marketing--preview .dm-showcase-card__request { padding: 5px; font-size: 8px; }
 .dm-marketing--preview .dm-journey__layout { grid-template-columns: 1fr; gap: 5px; }
 .dm-marketing--preview .dm-journey__step { grid-template-columns: 18px 1fr 15px; gap: 7px; padding: 8px 0; }
 .dm-marketing--preview .dm-journey__step p, .dm-marketing--preview .dm-journey__note { font-size: 9px; }

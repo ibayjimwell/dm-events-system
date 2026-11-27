@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { loginForBooking } from '@/lib/bookingNavigation';
+import { bookingDestination, loginForBooking } from '@/lib/bookingNavigation';
 import { ArrowDown, ArrowRight, ArrowUpRight, CalendarDays, CheckCircle2, MessageCircle, Sparkles, Star, Quote } from 'lucide-react';
 import PackageShowcaseCard, { type PublicPackage } from './PackageShowcaseCard';
 import { normalizeHomepage } from '@/lib/sitePresentation';
@@ -15,11 +15,12 @@ export type HomepageSite = {
 };
 const featureIcons = [Sparkles, CalendarDays, MessageCircle] as const;
 
-export default function HomeShowcase({ site, featured, feedback, preview = false }: {
+export default function HomeShowcase({ site, featured, feedback, preview = false, userIsClient = false }: {
   site: HomepageSite;
   featured: PublicPackage[];
   feedback?: { reviews: PublicServiceReview[]; count: number; average: number };
   preview?: boolean;
+  userIsClient?: boolean;
 }) {
   const h = normalizeHomepage(site.homepage);
   return <main className={`dm-marketing ${preview ? 'dm-marketing--preview' : ''}`}>
@@ -50,7 +51,7 @@ export default function HomeShowcase({ site, featured, feedback, preview = false
 
     <section className="dm-featured dm-marketing__container" aria-labelledby="dm-featured-title">
       <div className="dm-featured__head"><div className="dm-section-heading"><p className="dm-eyebrow"><span className="dm-line" />{h.packagesEyebrow}</p><h2 id="dm-featured-title">{h.packagesTitle}</h2><p>{h.packagesBody}</p></div><Link className="dm-text-link" href="/packages">View all packages <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
-      {featured.length ? <div className="dm-showcase-grid">{featured.slice(0,3).map((item,i)=><PackageShowcaseCard key={item.id} item={item} index={i} />)}</div> : <div className="dm-empty-packages"><Sparkles size={28} aria-hidden="true" /><h3>Something wonderful is taking shape.</h3><p>Our packages are being prepared. You can still share your event idea with us.</p><Link className="dm-button dm-button--dark" href={loginForBooking()}>Start an inquiry <ArrowRight size={16} /></Link></div>}
+      {featured.length ? <div className="dm-showcase-grid">{featured.slice(0,3).map((item,i)=><PackageShowcaseCard key={item.id} item={item} index={i} requestHref={userIsClient ? bookingDestination(item.id) : undefined} />)}</div> : <div className="dm-empty-packages"><Sparkles size={28} aria-hidden="true" /><h3>Something wonderful is taking shape.</h3><p>Our packages are being prepared. You can still share your event idea with us.</p><Link className="dm-button dm-button--dark" href={loginForBooking()}>Start an inquiry <ArrowRight size={16} /></Link></div>}
     </section>
 
     {feedback && feedback.reviews.length > 0 && <section className="dm-reviews" aria-labelledby="dm-reviews-title">

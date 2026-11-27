@@ -143,7 +143,6 @@ export const bookingInput = z.object({
   contactName: z.string().trim().min(2).max(180),
   contactEmail: z.string().trim().email(),
   contactPhone: z.string().trim().min(6).max(50).refine((value) => !!toE164(value), 'Enter a valid phone number with country code.').transform((value) => toE164(value)!),
-  eventType: z.string().trim().min(2).max(120),
   eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   guestCount: z.coerce.number().int().min(1).max(100000),
   // Venue may be unknown when requesting a quotation; never require a location upfront.

@@ -1,3 +1,4 @@
+import { bookingEventLabel } from '@/lib/bookingEventLabel';
 import {requireAvailableBookingDate,requireBookingDateWithinWindow} from '@/lib/bookingAvailability';
 import {route,ok,readJson,HttpError} from '@/lib/http';
 import {requireActor,audit,checkAuthLimit} from '@/lib/auth';
@@ -25,14 +26,20 @@ export const POST=route(async(req)=>{
   const values=bookingInput.parse(await readJson(req));
   if ((values.venueLatitude==null)!==(values.venueLongitude==null) || (values.venueLatitude!=null && !values.venue.trim())) throw new HttpError(400,'Select a complete venue location.');
   await requireAvailableBookingDate(values.eventDate);
-  if(values.packageId){const [pkg]=await db.select().from(packages).where(and(eq(packages.id,values.packageId),eq(packages.published,true)));if(!pkg)throw new HttpError(400,'Package unavailable');}
   if(values.inspirationAssetId){const [asset]=await db.select().from(mediaAssets).where(and(eq(mediaAssets.id,values.inspirationAssetId),eq(mediaAssets.uploadedBy,user.id),eq(mediaAssets.kind,'INSPIRATION')));if(!asset||asset.bookingId)throw new HttpError(400,'Inspiration image unavailable');}
   await checkAuthLimit('online-booking:'+user.id,5); // Max 5 submissions per 15 minutes.
   const reference=`DEM-${new Date().getFullYear()}-${randomBytes(4).toString('hex').toUpperCase()}`;
   const [created]=await db.transaction(async tx=>{
+    // Authoritative package lookup: do not trust an event type supplied by the browser.
+    const [pkg] = values.packageId
+      ? await tx.select({ name: packages.name }).from(packages)
+        .where(and(eq(packages.id, values.packageId), eq(packages.published,true))).limit(1)
+      : [];
+    if (values.packageId && !pkg) throw new HttpError(400, 'Package unavailable');
+    const eventType = bookingEventLabel(pkg?.name);
     // Revalidate against Date.now() inside the write transaction at midnight.
     requireBookingDateWithinWindow(values.eventDate);
-    const [booking]=await tx.insert(bookings).values({reference,source:'ONLINE',createdBy:user.id,clientId:user.id,contactName:values.contactName,contactEmail:values.contactEmail,contactPhone:values.contactPhone,eventType:values.eventType,eventDate:values.eventDate,guestCount:values.guestCount,venue:values.venue,venueLatitude:values.venueLatitude??null,venueLongitude:values.venueLongitude??null,estimatedBudget:values.estimatedBudget,packageId:values.packageId||null,preferredTheme:values.preferredTheme,colorPalette:values.colorPalette,specialRequests:values.specialRequests,inspirationAssetId:values.inspirationAssetId||null,privacyConsentedAt:new Date()}).returning();
+    const [booking]=await tx.insert(bookings).values({reference,source:'ONLINE',createdBy:user.id,clientId:user.id,contactName:values.contactName,contactEmail:values.contactEmail,contactPhone:values.contactPhone,eventType,eventDate:values.eventDate,guestCount:values.guestCount,venue:values.venue,venueLatitude:values.venueLatitude??null,venueLongitude:values.venueLongitude??null,estimatedBudget:values.estimatedBudget,packageId:values.packageId||null,preferredTheme:values.preferredTheme,colorPalette:values.colorPalette,specialRequests:values.specialRequests,inspirationAssetId:values.inspirationAssetId||null,privacyConsentedAt:new Date()}).returning();
     await tx.insert(bookingHistory).values({bookingId:booking.id,actorId:user.id,toStatus:'TENTATIVE',note:'Client booking inquiry submitted'});
     if(values.inspirationAssetId)await tx.update(mediaAssets).set({bookingId:booking.id}).where(eq(mediaAssets.id,values.inspirationAssetId));
     const notifications = notificationRows(booking, 'BOOKING_CREATED', booking.id);

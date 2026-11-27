@@ -71,7 +71,7 @@ test('five-step form contains package, inline date, event details, account conta
 
 test('the selected package must still be published, including just before submit', () => {
   assert.match(wizard, /requestedPackageId = search\.get\('package'\)/);
-  assert.match(wizard, /result\.packages\.some\(pkg => pkg\.id === requestedPackageId\)/);
+  assert.match(wizard, /publishedPackages\.some\(pkg => pkg\.id === requestedPackageId\)/);
   assert.match(wizard, /packages\.some\(pkg => pkg\.id === form\.packageId\)/);
   assert.match(read('app/api/bookings/route.ts'), /eq\(packages\.published,true\)/);
 });
@@ -93,8 +93,8 @@ test('contact details load from authenticated client, while venue is optional', 
   assert.match(read('src/lib/validators.ts'), /venue: z\.string\(\)\.trim\(\)\.max\(2000\)\.default\(''\)/);
 });
 
-test('Other event type and inspiration photo persist in submitted payload', () => {
-  assert.match(wizard, /form\.eventType === 'Other' \? customEventType\.trim\(\)/);
+test('event type is no longer an input while inspiration photo persists in submitted payload', () => {
+  assert.doesNotMatch(wizard, /booking-event-type|customEventType|form\.eventType/);
   assert.match(wizard, /uploadImage\(file, 'INSPIRATION'\)/);
   assert.match(wizard, /set\('inspirationAssetId', asset\.id\)/);
   assert.match(wizard, /MAX_PHOTO_BYTES = 10 \* 1024 \* 1024/);

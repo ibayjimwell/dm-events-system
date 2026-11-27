@@ -20,3 +20,12 @@
 @media(max-width:850px){.hero{padding:34px}.heroAside{display:none}.progressItem{flex-direction:column;align-items:center;gap:6px;padding:11px 4px;text-align:center}.progressItem small{display:none!important}.progressItem strong{font-size:10px}.cardHead{padding:29px 28px}.cardBody{padding:28px}.packageContent{padding:16px}.packageImage{height:150px}}
 @media(max-width:610px){.page{padding:14px 11px 58px}.hero{padding:26px 23px;border-radius:17px}.hero h1{font-size:29px}.hero p{font-size:12px}.progress{gap:5px;margin:14px 0}.progressIcon{width:31px;height:31px}.progressItem{border-radius:9px;padding:9px 2px}.progressItem strong{font-size:9px}.card{border-radius:16px}.cardHead{padding:25px 19px 22px}.cardHead h2{font-size:25px}.cardBody{padding:21px 16px 25px}.packageGrid{grid-template-columns:1fr;gap:14px}.packageImage{height:176px}.detailForm,.stylingFields{grid-template-columns:1fr;gap:19px}.fieldFull{grid-column:1}.actions{flex-direction:column;align-items:stretch}.actionButtons{display:flex}.actionButtons button{flex:1}.securityFoot{justify-content:center;text-align:center;line-height:1.5}.summaryRows>div{gap:9px}.summaryRows dt{flex-basis:38%}}
 @media(prefers-reduced-motion:reduce){.page *, .page *:before,.page *:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+/* Show the already chosen package on the date/details/contact steps so users
+   can revise it without repeating the first step. */
+.packageContext{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:24px;padding:14px 16px;border:1px solid #d6e6ee;border-radius:12px;background:#f5f9fc}
+.packageContext div{min-width:0;display:flex;flex-direction:column;gap:5px}
+.packageContext span{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:750;color:#617d90}
+.packageContext strong{font-size:14px;font-weight:750;color:#17354e;overflow-wrap:anywhere}
+.contextAction{flex:none;border:0;background:transparent;text-decoration:underline;text-underline-offset:3px;color:#0b4d98;font-size:12px;font-weight:750;cursor:pointer}
+.contextAction:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:610px){.packageContext{align-items:flex-start;gap:10px}.contextAction{text-align:right;max-width:120px}}

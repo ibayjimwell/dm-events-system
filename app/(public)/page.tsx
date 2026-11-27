@@ -31,6 +31,7 @@ export default async function Home() {
       contactPhone: site?.contactPhone,
     }}
     featured={featured}
+    userIsClient={user?.role === 'CLIENT'}
     feedback={feedback}
   />;
 }

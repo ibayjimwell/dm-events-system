@@ -29,12 +29,12 @@ type PublicPackage = {
   inclusions: string[];
   imageId: string | null;
   imageIds?: string[];
+  published: boolean;
 };
 type Values = {
   contactName: string;
   contactEmail: string;
   contactPhone: string;
-  eventType: string;
   eventDate: string;
   guestCount: string;
   venue: string;
@@ -55,11 +55,10 @@ const steps = [
   { title: 'Your contact', subtitle: 'Verify your details', icon: UserRound },
   { title: 'Review', subtitle: 'Confirm your inquiry', icon: ClipboardCheck },
 ] as const;
-const eventTypes = ['Wedding', 'Birthday', 'Debut', 'Corporate Event', 'Other'] as const;
 const inputClass = styles.input;
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 const initialValues: Values = {
-  contactName: '', contactEmail: '', contactPhone: '', eventType: 'Wedding', eventDate: '',
+  contactName: '', contactEmail: '', contactPhone: '', eventDate: '',
   guestCount: '', venue: '', estimatedBudget: '', packageId: '', preferredTheme: '',
   colorPalette: '', specialRequests: '', inspirationAssetId: '',
 };
@@ -70,16 +69,16 @@ function readableDate(iso: string): string {
     .format(new Date(Date.UTC(year, month - 1, day, 12)));
 }
 
-export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'COORDINATOR' } = {}) {
+export default function BookingWizard({ walkInRole, initialPackageId }: { walkInRole?: 'ADMIN'|'COORDINATOR'; initialPackageId?: string } = {}) {
   const isWalkIn = !!walkInRole;
   const listBase = walkInRole === 'ADMIN' ? '/admin/bookings' : '/coordinator/requests';
   const [completed, setCompleted] = useState<{id:string;reference:string}|null>(null);
   const router = useRouter();
   const search = useSearchParams();
   const requestedPackageId = search.get('package') ?? '';
-  const [step, setStep] = useState<Step>(1);
-  const [form, setForm] = useState<Values>(() => ({ ...initialValues, packageId: requestedPackageId }));
-  const [customEventType, setCustomEventType] = useState('');
+  const [step, setStep] = useState<Step>(initialPackageId ? 2 : 1);
+  const [form, setForm] = useState<Values>(() => ({ ...initialValues, packageId: initialPackageId ?? requestedPackageId }));
+  const validatedIntent = useRef<string | null>(initialPackageId ?? null);
   const [venueCoordinates, setVenueCoordinates] = useState<{lat:number;lng:number}|null>(null);
   const [packages, setPackages] = useState<PublicPackage[] | null>(null);
   const [packageError, setPackageError] = useState('');
@@ -96,27 +95,36 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
   const set = <K extends keyof Values>(key: K, value: Values[K]) =>
     setForm(previous => ({ ...previous, [key]: value }));
 
-  // The query is the source of truth for a package chosen on the public website.
-  useEffect(() => {
-    if (requestedPackageId) setForm(previous => ({ ...previous, packageId: requestedPackageId }));
-  }, [requestedPackageId]);
-
-  // Only published packages are selectable; do not silently substitute another package.
+  // Query parameters are untrusted. The server prevalidates the package for the
+  // initial render; the browser rechecks against the published package list.
+  // Never auto-jump back to Step 2 if the user explicitly returns to Step 1.
   useEffect(() => {
     const controller = new AbortController();
     setPackageError('');
     void api<{ packages: PublicPackage[] }>('/api/packages', { signal: controller.signal })
       .then(result => {
         if (controller.signal.aborted) return;
-        setPackages(result.packages);
-        if (requestedPackageId && !result.packages.some(pkg => pkg.id === requestedPackageId)) {
-          setForm(previous => ({ ...previous, packageId: '' }));
+        // Staff may manage unpublished packages: those must never appear in booking.
+        const publishedPackages = result.packages.filter(pkg => pkg.published === true);
+        setPackages(publishedPackages);
+        if (!requestedPackageId) return;
+        if (!publishedPackages.some(pkg => pkg.id === requestedPackageId)) {
+          // A package may have been unpublished after the server rendered the page.
+          setForm(previous => previous.packageId === requestedPackageId ? { ...previous, packageId: '' } : previous);
+          setStep(1);
           setPackageError('The requested package is no longer available. Please choose another package.');
+          return;
+        }
+        if (validatedIntent.current !== requestedPackageId) {
+          validatedIntent.current = requestedPackageId;
+          setForm(previous => ({ ...previous, packageId: requestedPackageId }));
+          setStep(2);
         }
       })
       .catch(() => {
         if (!controller.signal.aborted) {
           setPackages(null);
+          setStep(1);
           setPackageError('Could not load published packages. Please retry.');
         }
       });
@@ -152,13 +160,28 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
   }, [isWalkIn]);
 
   const selectedPackage = packages?.find(pkg => pkg.id === form.packageId);
-  const eventType = form.eventType === 'Other' ? customEventType.trim() : form.eventType;
   const normalizedPhone = normalizePhoneNumber(form.contactPhone, country);
 
   function move(next: Step) {
     setStep(next);
     setError('');
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // One selection, one action: move straight to choosing an available date.
+  function choosePackage(id: string) {
+    set('packageId', id);
+    setPackageError('');
+    // Keep the selected package in the shareable URL without a full navigation
+    // or losing the other answers in this wizard. Next.js observes native
+    // history updates through useSearchParams.
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (id) url.searchParams.set('package', id);
+      else url.searchParams.delete('package');
+      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+    move(2);
   }
 
   const continueStep = useCallback(async () => {
@@ -190,9 +213,6 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
       return;
     }
     if (step === 3) {
-      if (eventType.length < 2 || eventType.length > 120) {
-        setError('Enter an event type between 2 and 120 characters.'); return;
-      }
       if (!Number.isInteger(Number(form.guestCount)) || Number(form.guestCount) < 1 || Number(form.guestCount) > 100000) {
         setError('Enter an expected guest count between 1 and 100,000.'); return;
       }
@@ -218,7 +238,7 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
     }
   // `move` is intentionally a UI-only action; the latest form values drive each check.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busy, step, packages, form, eventType, profileStatus, normalizedPhone, isWalkIn]);
+  }, [busy, step, packages, form, profileStatus, normalizedPhone, isWalkIn]);
 
   async function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -263,7 +283,6 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
       await assertAvailableDate(form.eventDate);
       const result = await api<{ booking: { id: string; reference: string } }>(isWalkIn ? '/api/bookings/walk-in' : '/api/bookings', json('POST', {
         ...form,
-        eventType,
         venue: form.venue.trim(), venueLatitude: venueCoordinates?.lat ?? null, venueLongitude: venueCoordinates?.lng ?? null,
         estimatedBudget: form.estimatedBudget.trim(),
         contactPhone: normalizedPhone,
@@ -312,7 +331,7 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
           <div>
             <span className={styles.eyebrow}><Sparkles size={14} /> {isWalkIn ? 'STAFF · WALK-IN INQUIRY' : 'YOUR EVENT, BEAUTIFULLY PLANNED'}</span>
             <h1>{isWalkIn ? <>Plan a walk-in <em>celebration.</em></> : <>Let’s plan something <em>memorable.</em></>}</h1>
-            <p>{isWalkIn ? 'Same five-step booking experience as the client portal, with staff recording the customer’s consent.' : 'Five simple steps to tell DM Events about the celebration you have in mind.'}</p>
+            <p>{isWalkIn ? initialPackageId ? 'Your package is already chosen. Pick the date, share event details, and record the customer’s consent.' : 'Five simple steps, with staff recording the customer’s consent.' : initialPackageId ? 'You chose your package. Start with an available date, then tell us a few details.' : 'Five simple steps to tell DM Events about the celebration you have in mind.'}</p>
           </div>
           <div className={styles.heroAside} aria-hidden="true"><CalendarDays size={33} /><span>01 — 05</span><small>YOUR EVENT JOURNEY</small></div>
         </div>
@@ -363,8 +382,8 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
                   {packages?.map((item, index) => {
                     const selected = form.packageId === item.id;
                     return <div key={item.id} role="radio" tabIndex={0} aria-checked={selected}
-                      onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();set('packageId',item.id);setPackageError('');}}}
-                      onClick={() => { set('packageId', item.id); setPackageError(''); }}
+                      onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();choosePackage(item.id);}}}
+                      onClick={() => choosePackage(item.id)}
                       className={`${styles.packageOption} ${selected ? styles.packageSelected : ''}`}>
                       <div className={styles.packageImage}>
                         <PackageImageCarousel imageIds={item.imageIds} imageId={item.imageId} alt={item.name} placeholder={<span className={`${styles.packageFallback} ${styles[`fallback${index % 3}`]}`}><ImageIcon size={39} strokeWidth={1.3} /></span>}/>
@@ -379,7 +398,7 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
                     </div>;
                   })}
                   {packages !== null && <button type="button" role="radio" aria-checked={!form.packageId}
-                    onClick={() => set('packageId', '')} className={`${styles.packageOption} ${styles.unsure} ${!form.packageId ? styles.packageSelected : ''}`}>
+                    onClick={() => choosePackage('')} className={`${styles.packageOption} ${styles.unsure} ${!form.packageId ? styles.packageSelected : ''}`}>
                     <span className={styles.unsureIcon}><Sparkles size={30} /></span>
                     <span className={styles.packageContent}>
                       <strong>Help me choose</strong>
@@ -387,6 +406,13 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
                       <span className={styles.selectPrompt}>{!form.packageId ? 'Selected · Discuss later' : 'Choose this option'}<span className={styles.radioMark}>{!form.packageId && <Check size={14}/>}</span></span>
                     </span>
                   </button>}
+                </div>
+              )}
+
+              {step > 1 && step < 5 && (
+                <div className={styles.packageContext}>
+                  <div><span>Selected package</span><strong>{packages === null && form.packageId ? 'Verifying your package…' : selectedPackage?.name ?? 'Help me choose · Event consultation'}</strong></div>
+                  <button type="button" className={styles.contextAction} onClick={() => move(1)} disabled={busy}>Change package</button>
                 </div>
               )}
 
@@ -400,13 +426,6 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
 
               {step === 3 && (
                 <div className={styles.detailForm}>
-                  <div className={styles.field}>
-                    <label htmlFor="booking-event-type">Event type <span>*</span></label>
-                    <select id="booking-event-type" className={inputClass} value={form.eventType} onChange={e => set('eventType', e.target.value)}>
-                      {eventTypes.map(item => <option key={item} value={item}>{item}</option>)}
-                    </select>
-                    {form.eventType === 'Other' && <input className={inputClass} value={customEventType} maxLength={120} onChange={e => setCustomEventType(e.target.value)} placeholder="Describe your event type" aria-label="Other event type" required />}
-                  </div>
                   <div className={styles.field}>
                     <label htmlFor="booking-guests">Expected guest count <span>*</span></label>
                     <div className={styles.fieldIcon}><UsersRound size={18}/><input id="booking-guests" className={inputClass} type="number" inputMode="numeric" min={1} max={100000} value={form.guestCount} onChange={e => set('guestCount', e.target.value)} placeholder="e.g. 150" required /></div>
@@ -464,7 +483,7 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
                   </section>
                   <section className={styles.summaryBlock}>
                     <div className={styles.summaryHead}><h3><PartyPopper size={17}/> Event details</h3><button type="button" onClick={() => move(3)}>Edit</button></div>
-                    <dl className={styles.summaryRows}><div><dt>Event type</dt><dd>{eventType}</dd></div><div><dt>Expected guests</dt><dd>{form.guestCount}</dd></div><div><dt>Event location</dt><dd>{form.venue.trim() || 'Not decided yet'}</dd></div><div><dt>Estimated budget</dt><dd>{new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP'}).format(Number(form.estimatedBudget || 0))}</dd></div>{form.preferredTheme && <div><dt>Theme</dt><dd>{form.preferredTheme}</dd></div>}{form.colorPalette && <div><dt>Colors</dt><dd>{form.colorPalette}</dd></div>}{form.specialRequests && <div><dt>Special requests</dt><dd>{form.specialRequests}</dd></div>}{form.inspirationAssetId && <div><dt>Inspiration</dt><dd>Photo attached</dd></div>}</dl>
+                    <dl className={styles.summaryRows}><div><dt>Expected guests</dt><dd>{form.guestCount}</dd></div><div><dt>Event location</dt><dd>{form.venue.trim() || 'Not decided yet'}</dd></div><div><dt>Estimated budget</dt><dd>{new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP'}).format(Number(form.estimatedBudget || 0))}</dd></div>{form.preferredTheme && <div><dt>Theme</dt><dd>{form.preferredTheme}</dd></div>}{form.colorPalette && <div><dt>Colors</dt><dd>{form.colorPalette}</dd></div>}{form.specialRequests && <div><dt>Special requests</dt><dd>{form.specialRequests}</dd></div>}{form.inspirationAssetId && <div><dt>Inspiration</dt><dd>Photo attached</dd></div>}</dl>
                   </section>
                   <section className={styles.summaryBlock}>
                     <div className={styles.summaryHead}><h3><UserRound size={17}/> Contact information</h3><button type="button" onClick={() => move(4)}>Edit</button></div>
@@ -483,7 +502,7 @@ export default function BookingWizard({ walkInRole }: { walkInRole?: 'ADMIN'|'CO
             <div className={styles.stepCount}>Step {step} of 5 <span>·</span> {steps[step - 1].title}</div>
             <div className={styles.actionButtons}>
               {step > 1 && <button type="button" disabled={busy} className={styles.secondaryButton} onClick={() => move((step - 1) as Step)}><ChevronLeft size={18} /> Back</button>}
-              {step < 5 ? <button type="button" disabled={busy || (step === 1 && packages === null)} className={styles.primaryButton} onClick={() => void continueStep()}>{busy ? 'Checking…' : 'Continue'} <ChevronRight size={18} /></button>
+              {step < 5 ? <button type="button" disabled={busy || packages === null} className={styles.primaryButton} onClick={() => void continueStep()}>{busy ? 'Checking…' : 'Continue'} <ChevronRight size={18} /></button>
                 : <button type="submit" disabled={busy || !consent} className={styles.primaryButton}>{busy ? 'Submitting…' : isWalkIn ? 'Record walk-in inquiry' : 'Confirm & submit request'} <CheckCircle2 size={18}/></button>}
             </div>
           </div>

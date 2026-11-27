@@ -6,6 +6,10 @@
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ORIGIN = 'https://dm-events.invalid';
 
+export function isValidBookingPackageId(input: unknown): input is string {
+  return typeof input === 'string' && UUID.test(input);
+}
+
 export function bookingDestination(packageId?: string | null): string {
   return packageId ? `/client/book?package=${encodeURIComponent(packageId)}` : '/client/book';
 }
@@ -17,7 +21,7 @@ export function safeBookingDestination(input: string | null | undefined): string
     if (parsed.origin !== ORIGIN || parsed.pathname !== '/client/book' || parsed.hash) return null;
     if (Array.from(parsed.searchParams.keys()).some(key => key !== 'package')) return null;
     const values = parsed.searchParams.getAll('package');
-    if (values.length > 1 || (values.length === 1 && !UUID.test(values[0]))) return null;
+    if (values.length > 1 || (values.length === 1 && !isValidBookingPackageId(values[0]))) return null;
     return bookingDestination(values[0] ?? null);
   } catch {
     return null;
